@@ -1,0 +1,37 @@
+# 依赖
+node_modules/
+backend/target/
+server/node_modules/
+
+# 构建产物
+dist/
+
+# 环境变量（含密钥，不上传）
+.env
+.env.local
+.env.production.local
+backend/.env
+
+# 日志
+logs/
+*.log
+
+# 旧备份（Git 本身就是版本管理，不需要手动备份）
+backup/
+
+# IDE 个人配置
+.vscode/
+.idea/
+*.iml
+
+# BI 看板 demo（独立项目，非主应用）
+public/_ref/
+
+# 临时文件
+*.tmp
+*.swp
+.DS_Store
+Thumbs.db
+
+# 追踪文件
+_update_track.js

@@ -1,0 +1,8 @@
+# Docker Compose 覆盖配置
+# 使用官方镜像源
+services:
+  mysql:
+    image: mysql:8.0
+    
+  redis:
+    image: redis:7-alpine

@@ -1,0 +1,566 @@
+# 售后系统 - 实施计划（分解与优先级任务列表）
+
+## [ ] 任务 1: 系统架构设计
+- **Priority**: P0
+- **Depends On**: None
+- **Description**:
+  - 设计系统整体架构，包括前端、后端、数据库和第三方服务集成
+  - 确定技术栈和开发框架
+  - 设计系统模块划分和数据流
+- **Acceptance Criteria Addressed**: AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7
+- **Test Requirements**:
+  - `programmatic` TR-1.1: 架构文档完整，包含所有必要组件
+  - `human-judgement` TR-1.2: 架构设计符合企业微信生态要求，可扩展性强
+- **Notes**: 需考虑企业微信API限制和安全要求
+
+## [ ] 任务 2: 基础数据模型设计
+- **Priority**: P0
+- **Depends On**: 任务 1
+- **Description**:
+  - 设计客户管理数据模型
+  - 设计设备管理数据模型（一机一码）
+  - 设计工单管理数据模型
+  - 设计配件管理数据模型
+- **Acceptance Criteria Addressed**: AC-1, AC-2, AC-3, AC-5
+- **Test Requirements**:
+  - `programmatic` TR-2.1: 数据模型覆盖所有业务场景
+  - `human-judgement` TR-2.2: 数据模型设计合理，易于扩展
+- **Notes**: 需考虑数据量增长和查询性能
+
+## [ ] 任务 3: 企业微信服务号集成
+- **Priority**: P1
+- **Depends On**: 任务 1
+- **Description**:
+  - 配置企业微信服务号
+  - 实现服务号消息推送
+  - 开发服务号菜单和页面
+  - 实现用户身份认证
+- **Acceptance Criteria Addressed**: AC-7
+- **Test Requirements**:
+  - `programmatic` TR-3.1: 服务号菜单正确显示，功能可访问
+  - `human-judgement` TR-3.2: 用户体验流畅，界面美观
+- **Notes**: 需遵循企业微信开发规范
+
+## [ ] 任务 4: 客户管理模块
+- **Priority**: P1
+- **Depends On**: 任务 2
+- **Description**:
+  - 实现客户信息管理（多主体关联）
+  - 客户联系人管理
+  - 客户设备关联管理
+  - 客户服务历史查询
+  - 天眼查集成
+  - 注册审核流
+  - 客户分级管理
+- **Acceptance Criteria Addressed**: AC-1
+- **Test Requirements**:
+  - `programmatic` TR-4.1: 客户信息CRUD操作正常
+  - `programmatic` TR-4.2: 天眼查集成功能正常
+  - `programmatic` TR-4.3: 注册审核流程正常
+  - `human-judgement` TR-4.4: 客户信息管理界面易用
+- **Notes**: 需支持客户分级管理（VIP/普通/潜在）
+
+## [x] 任务 5: 客户与设备档案模块
+- **Priority**: P1
+- **Depends On**: 任务 2
+- **Status**: ✅ 后端API已完成
+- **Description**:
+  - 实现设备信息管理（一机一码）✅ 后端API完成
+  - 设备状态监控 ✅ 后端API完成
+  - 设备维护历史记录
+  - 设备生命周期管理 ✅ 后端API完成
+  - 设备二维码生成和扫码功能
+  - 客户360视图
+  - 设备档案字段管理
+  - 与订单/出货系统同步
+  - 设备状态追踪（安装 -> 验收 -> 保修中 -> 出保 -> 报废）✅ 后端API完成
+- **Acceptance Criteria Addressed**: AC-2
+- **Test Requirements**:
+  - `programmatic` TR-5.1: 设备信息CRUD操作正常 ✅
+  - `programmatic` TR-5.2: 设备二维码生成和扫码功能正常
+  - `programmatic` TR-5.3: 与订单/出货系统同步功能正常
+  - `human-judgement` TR-5.4: 设备管理界面直观
+- **Notes**: 
+  - ✅ 后端API已完成：AssetService, AssetController, AssetDTO, AssetMapper
+  - 需支持设备二维码生成和扫码功能，每台设备绑定动态二维码
+
+## [x] 任务 6: 工单管理模块
+- **Priority**: P1
+- **Depends On**: 任务 2
+- **Status**: ✅ 后端API已完成
+- **Description**:
+  - 安装工单管理（触发、绑定激活、GPS定位、安装报告、客户签字）✅ 后端API完成
+  - 服务工单管理（维修、改造、巡检，完整流程）✅ 后端API完成
+  - 配件销售工单管理（配件清单、Excel导入、报价查询）
+  - 工单创建和分配 ✅ 后端API完成
+  - 工单状态跟踪 ✅ 后端API完成
+  - 工单处理流程管理 ✅ 后端API完成（接单、开始、完成、取消）
+  - 工单统计分析 ✅ 后端API完成
+  - 工单优先级设置和SLA管理 ✅ 后端API完成
+  - PDF报告生成
+  - 工单列表管理（模糊检索、多条件筛选、排序、字段自定义）✅ 后端API完成
+- **Acceptance Criteria Addressed**: AC-3
+- **Test Requirements**:
+  - `programmatic` TR-6.1: 工单创建、分配、处理流程正常 ✅
+  - `programmatic` TR-6.2: 工单统计分析功能正常 ✅
+  - `programmatic` TR-6.3: PDF报告生成功能正常
+  - `programmatic` TR-6.4: 配件销售工单功能正常
+  - `human-judgement` TR-6.5: 工单管理界面清晰
+- **Notes**: 
+  - ✅ 后端API已完成：WorkorderService, WorkorderController, WorkorderDTO, WorkorderMapper
+  - 需支持工单优先级设置和SLA管理，内置HTML模板引擎生成PDF
+
+## [ ] 任务 7: 动态二维码安全体系
+- **Priority**: P1
+- **Depends On**: 任务 5
+- **Description**:
+  - 空白码池管理
+  - 二维码绑定激活
+  - 防伪验证
+  - 动态二维码生成
+- **Acceptance Criteria Addressed**: AC-2
+- **Test Requirements**:
+  - `programmatic` TR-7.1: 空白码池生成功能正常
+  - `programmatic` TR-7.2: 二维码绑定激活功能正常
+  - `programmatic` TR-7.3: 防伪验证功能正常
+- **Notes**: 防止二维码被提前复制、伪造
+
+## [ ] 任务 8: 现场服务与外勤日历模块
+- **Priority**: P2
+- **Depends On**: 任务 6
+- **Description**:
+  - 实现移动端打卡功能（双模式：工单打卡、活动打卡）
+  - 现场照片上传
+  - 电子签名功能
+  - 服务报告生成
+  - 离线操作支持
+  - 审批流配置
+  - 个人日历和管理日历
+  - 打卡记录管理和导出
+- **Acceptance Criteria Addressed**: AC-4
+- **Test Requirements**:
+  - `programmatic` TR-8.1: 移动端功能测试通过
+  - `programmatic` TR-8.2: 离线操作后数据同步正常
+  - `programmatic` TR-8.3: 审批流功能正常
+  - `human-judgement` TR-8.4: 移动端界面易用
+- **Notes**: 需考虑防作弊措施，如GPS定位限制、水印相机
+
+## [x] 任务 9: 配件管理模块
+- **Priority**: P2
+- **Depends On**: 任务 2
+- **Status**: ✅ 后端API已完成
+- **Description**:
+  - 实现配件库存管理 ✅ 后端API完成
+  - 配件销售记录
+  - 配件关联设备
+  - 配件采购管理
+  - 配件编码管理 ✅ 后端API完成
+  - 库存状态自动计算（充足/紧张/缺货）✅ 后端API完成
+  - 库存调整功能 ✅ 后端API完成
+  - 低库存配件查询 ✅ 后端API完成
+  - 配件统计（库存总值）✅ 后端API完成
+- **Acceptance Criteria Addressed**: AC-5
+- **Test Requirements**:
+  - `programmatic` TR-9.1: 配件管理操作正常 ✅
+  - `human-judgement` TR-9.2: 配件管理界面清晰
+- **Notes**: 
+  - ✅ 后端API已完成：PartService, PartController, PartDTO, PartMapper
+  - 需支持配件编码管理
+
+## [ ] 任务 10: 数据可视化模块
+- **Priority**: P2
+- **Depends On**: 任务 4, 5, 6
+- **Description**:
+  - 设计数据看板
+  - 实现服务效率分析
+  - 设备状态监控
+  - 客户满意度分析
+- **Acceptance Criteria Addressed**: AC-6
+- **Test Requirements**:
+  - `programmatic` TR-10.1: 数据看板加载正常
+  - `human-judgement` TR-10.2: 数据可视化效果良好
+- **Notes**: 需考虑大数据量下的性能
+
+## [ ] 任务 11: 系统测试与部署
+- **Priority**: P1
+- **Depends On**: 任务 3-10
+- **Description**:
+  - 系统功能测试
+  - 性能测试
+  - 安全测试
+  - 部署上线
+- **Acceptance Criteria Addressed**: AC-1, AC-2, AC-3, AC-4, AC-5, AC-6, AC-7
+- **Test Requirements**:
+  - `programmatic` TR-11.1: 测试用例通过率100%
+  - `human-judgement` TR-11.2: 系统运行稳定
+- **Notes**: 需制定详细的测试计划
+
+## [x] 任务 12: 联系人管理与用户审核模块 (v2.0新增)
+- **Priority**: P1
+- **Depends On**: 任务 4
+- **Status**: ✅ 后端API已完成
+- **Description**:
+  - 实现联系人注册功能，用户填写姓名、手机号、邮箱、公司名称、公司地址等信息提交注册申请 ✅ 后端API完成
+  - 开发用户审核后台页面，管理员可查看待审核列表、批准或拒绝注册申请 ✅ 后端API完成
+  - 实现审核通过后的自动处理逻辑：自动创建联系人记录、自动创建客户记录（如公司不存在）、建立关联关系 ✅ 后端API完成
+  - 修改工单创建逻辑，限制只有通过审核的联系人才能发起工单 ✅ 后端API完成
+  - 联系人信息管理页面，支持查看联系人详情、历史工单、审核历史 ✅ 后端API完成
+  - 审核结果通知功能（邮件/短信）
+- **Acceptance Criteria Addressed**: AC-1 (扩展)
+- **Test Requirements**:
+  - `programmatic` TR-12.1: 联系人注册和审核流程正常 ✅
+  - `programmatic` TR-12.2: 审核通过后自动创建联系人和客户记录 ✅
+  - `programmatic` TR-12.3: 只有审核通过的联系人能发起工单 ✅
+  - `programmatic` TR-12.4: 审核结果通知功能正常
+  - `human-judgement` TR-12.5: 审核界面清晰易用
+- **Notes**: 
+  - ✅ 后端API已完成：ContactService, ContactController, ContactDTO, ContactMapper
+  - 需考虑并发审核的情况
+  - 公司信息匹配逻辑需考虑同名不同公司的情况
+  - 工单创建时的权限检查需在前后端都实现
+
+## [ ] 任务 13: 联系人登录与认证体系 (v2.1新增)
+- **Priority**: P0
+- **Depends On**: 任务 12
+- **Description**:
+  - **登录页面开发**：
+    - 手机号免密登录页面（输入手机号 -> 获取验证码 -> 登录）
+    - 微信授权登录页面（企业微信/微信内自动获取OpenID登录）
+    - Token自动登录（带Token的URL访问自动登录）
+  - **短信服务集成**：
+    - 接入短信服务商API（阿里云/腾讯云等）
+    - 实现短信验证码发送接口
+    - 实现短信发送频率限制（1分钟/次，10次/小时）
+    - 实现验证码有效期控制（5分钟）
+  - **微信OAuth集成**：
+    - 企业微信OAuth授权流程实现
+    - 微信公众号OAuth授权流程实现
+    - OpenID与联系人账号绑定逻辑
+  - **Token管理**：
+    - 生成登录Token（JWT）
+    - Token有效期管理（默认7天）
+    - Token刷新机制
+    - Token失效处理
+  - **访问控制中间件**：
+    - 未登录用户只能访问注册/登录页面
+    - 已登录但未审核用户提示"审核中"
+    - 审核通过用户可正常访问系统功能
+  - **扫码访问处理**：
+    - 设备二维码扫码后未登录跳转登录页
+    - 登录成功后自动跳转原目标页面
+    - 记录扫码来源，便于后续统计
+- **Acceptance Criteria Addressed**: AC-8
+- **Test Requirements**:
+  - `programmatic` TR-13.1: 手机号验证码登录流程正常
+  - `programmatic` TR-13.2: 微信OAuth授权登录正常
+  - `programmatic` TR-13.3: Token自动登录功能正常
+  - `programmatic` TR-13.4: 短信发送频率限制生效
+  - `programmatic` TR-13.5: 访问控制逻辑正确（未登录/未审核/已审核）
+  - `programmatic` TR-13.6: 扫码后登录成功自动跳转目标页面
+  - `human-judgement` TR-13.7: 登录流程简洁流畅
+- **Notes**: 
+  - 需选择短信服务商并配置API密钥
+  - 微信OAuth需要配置回调域名
+  - Token需要安全存储（HttpOnly Cookie或本地存储加密）
+  - 考虑多端登录冲突处理
+
+## [ ] 任务 14: 微信服务号菜单与消息推送 (v2.1新增)
+- **Priority**: P1
+- **Depends On**: 任务 13
+- **Description**:
+  - **服务号菜单配置**：
+    - 配置服务号底部菜单（设备查询、发起工单、个人中心）
+    - 菜单点击事件处理
+    - 未登录用户点击菜单跳转登录页
+  - **模板消息推送**：
+    - 审核结果通知（审核通过/拒绝）
+    - 工单状态变更通知
+    - 服务完成通知
+  - **关注/取关处理**：
+    - 新用户关注服务号引导注册
+    - 已注册用户关注自动绑定
+  - **网页授权优化**：
+    - 微信内打开自动静默授权获取OpenID
+    - 非微信浏览器提示使用微信访问
+- **Acceptance Criteria Addressed**: AC-7, AC-8
+- **Test Requirements**:
+  - `programmatic` TR-14.1: 服务号菜单配置正确
+  - `programmatic` TR-14.2: 模板消息推送正常
+  - `programmatic` TR-14.3: 关注/取关事件处理正常
+  - `human-judgement` TR-14.4: 消息内容清晰易懂
+- **Notes**: 
+  - 需申请微信模板消息权限
+  - 模板消息内容需符合微信规范
+  - 考虑消息发送失败的重试机制
+
+## [x] 任务 15: 配件销售报价单管理 (v2.2新增)
+- **Priority**: P1
+- **Depends On**: 任务 6, 9
+- **Status**: ✅ 后端API已完成
+- **Description**:
+  - **报价单制作功能**：
+    - 报价单编辑页面（添加、修改、删除配件明细）✅ 后端API完成
+    - 配件明细Excel一键导入功能（支持模板下载、数据校验、自动匹配）
+    - 报价计算引擎（小计、税额、总价自动计算，支持折扣设置）✅ 后端API完成
+    - 报价单模板配置（抬头、落款、条款、公司信息）
+  - **报价单审核流程**：
+    - 多级审核流程配置（工程师提交 -> 销售主管初审 -> 财务复审 -> 总经理终审）✅ 后端API完成
+    - 审核记录管理（审核意见、审核人、审核时间记录）✅ 后端API完成
+    - 审核状态流转（待审核/审核中/已通过/已驳回）✅ 后端API完成
+    - 驳回后修改重新提交功能 ✅ 后端API完成
+  - **报价单PDF生成**：
+    - Excel模板导入生成标准报价单PDF
+    - 电子签章功能（审核通过后自动加盖公司电子公章）
+    - PDF下载功能
+    - 邮件发送功能（直接发送PDF至客户邮箱）
+  - **报价单管理**：
+    - 报价日期记录（提交客户时自动记录）✅ 后端API完成
+    - 报价有效期管理（设置有效期，到期提醒）✅ 后端API完成
+    - 报价单版本管理（修改后生成新版本，保留历史）
+  - **订单转化功能**：
+    - 客户订单确认（批量维护订单日期）
+    - 配件型号确认（逐条确认型号、数量、价格）
+    - 库存锁定（确认后锁定配件库存）
+    - 订单状态追踪（待发货/已发货/已完成）
+- **Acceptance Criteria Addressed**: AC-3 (扩展), AC-5 (扩展)
+- **Test Requirements**:
+  - `programmatic` TR-15.1: 报价单编辑和Excel导入功能正常 ✅
+  - `programmatic` TR-15.2: 报价计算引擎计算准确 ✅
+  - `programmatic` TR-15.3: 多级审核流程正常 ✅
+  - `programmatic` TR-15.4: PDF生成和电子签章功能正常
+  - `programmatic` TR-15.5: 报价日期和有效期管理正常 ✅
+  - `programmatic` TR-15.6: 订单转化和库存锁定功能正常
+  - `human-judgement` TR-15.7: 报价单界面清晰易用
+- **Notes**:
+  - ✅ 后端API已完成：QuotationService, QuotationController, QuotationDTO, QuotationItemDTO, QuotationMapper
+  - Excel导入模板需要明确定义字段映射关系
+  - 电子签章需要准备公司公章图片或数字证书
+  - 审核流程需要可配置（不同金额走不同审核级别）
+  - 考虑报价单变更后的客户通知机制
+
+## [ ] 任务 16: 打卡提醒机制 (v2.3新增)
+- **Priority**: P1
+- **Depends On**: 任务 8
+- **Description**:
+  - **未提交打卡提醒功能**：
+    - 检测工程师已完成打卡（签离）但未提交审批的记录
+    - 实现提醒触发逻辑（可配置延迟时间，如签离后30分钟）
+    - 企业微信消息推送接口集成
+    - 系统内消息通知功能
+    - 提醒内容模板设计（包含未提交数量、最后打卡时间、快捷提交链接）
+    - 提醒频率配置（每天一次、每小时一次、实时）
+  - **待审批打卡提醒功能**：
+    - 检测有待审批打卡记录的审批者
+    - 实时提醒：工程师提交后立即推送
+    - 定时汇总提醒：每天上午9点汇总推送待审批事项
+    - 多渠道提醒：企业微信、系统内消息、邮件
+    - 提醒内容模板设计（包含待审批数量、提交人、提交时间、快捷审批链接）
+  - **提醒配置管理**：
+    - 提醒规则配置页面（开启/关闭、频率、方式）
+    - 按角色配置提醒策略
+    - 按人员配置个性化提醒策略
+    - 免打扰时段设置
+  - **提醒记录管理**：
+    - 提醒发送历史记录
+    - 提醒状态追踪（已发送、已送达、已读）
+    - 阅读回执功能
+    - 提醒记录查询和统计
+  - **移动端适配**：
+    - 移动端接收提醒消息
+    - 点击提醒消息快捷跳转
+- **Acceptance Criteria Addressed**: AC-4 (扩展)
+- **Test Requirements**:
+  - `programmatic` TR-16.1: 未提交打卡检测和提醒触发正常
+  - `programmatic` TR-16.2: 待审批打卡提醒发送正常
+  - `programmatic` TR-16.3: 企业微信消息推送功能正常
+  - `programmatic` TR-16.4: 邮件提醒功能正常
+  - `programmatic` TR-16.5: 提醒频率配置生效
+  - `programmatic` TR-16.6: 免打扰时段设置生效
+  - `programmatic` TR-16.7: 提醒记录和阅读回执正常
+  - `human-judgement` TR-16.8: 提醒内容清晰，入口便捷
+- **Notes**:
+  - 需要考虑企业微信API调用频率限制
+  - 提醒消息内容需符合企业微信模板消息规范
+  - 避免过度提醒造成用户困扰
+  - 考虑网络异常时的重试机制
+
+## [ ] 任务 17: 角色与端口访问权限控制 (v2.4新增)
+- **Priority**: P1
+- **Depends On**: 任务 1, 任务 8
+- **Description**:
+  - **角色端口权限配置**：
+    - 定义各角色的端口访问权限（客户-仅手机端、工程师-双端、技术部长-双端、业务员-仅电脑端、系统管理员-仅电脑端）
+    - 实现角色切换时的端口自动适配逻辑
+    - 业务员和系统管理员角色隐藏手机端切换按钮
+  - **技术部长手机端工作台**：
+    - 团队概览统计卡片（团队工单、待审批、今日打卡、在线人数）
+    - 团队成员列表展示（头像、在线状态、今日工单数、累计完成数）
+    - 快捷功能入口（团队管理、审批管理、团队统计、扫码、团队工单、外勤）
+    - 审批提醒卡片（待审批打卡提醒）
+  - **工程师手机端工作台**：
+    - 个人统计卡片（今日工单、待处理、进行中、外勤）
+    - 打卡提醒卡片（未提交打卡提醒）
+    - 快捷功能入口（扫码、我的工单、外勤）
+    - 今日待办列表
+  - **角色切换逻辑**：
+    - 客户角色自动进入手机端
+    - 业务员/系统管理员角色强制电脑端
+    - 工程师/技术部长角色可自由切换
+  - **权限检查**：
+    - 切换视图时检查角色权限
+    - 无权限时提示用户
+- **Acceptance Criteria Addressed**: AC-1 (扩展), AC-4 (扩展)
+- **Test Requirements**:
+  - `programmatic` TR-17.1: 各角色端口权限控制正确
+  - `programmatic` TR-17.2: 角色切换时端口自动适配
+  - `programmatic` TR-17.3: 技术部长工作台显示团队数据
+  - `programmatic` TR-17.4: 工程师工作台显示个人数据
+  - `programmatic` TR-17.5: 切换按钮根据角色正确显示/隐藏
+  - `human-judgement` TR-17.6: 技术部长工作台界面清晰，团队数据一目了然
+- **Notes**:
+  - 角色信息需要保存到localStorage供各页面共享
+  - 角色切换时需要触发全局事件通知子组件更新
+  - 技术部长和工程师的界面要有明显区分
+
+## [ ] 任务 18: 组织结构管理模块 (v2.5新增)
+- **Priority**: P1
+- **Depends On**: 任务 1
+- **Description**:
+  - **组织架构数据模型设计**：
+    - 设计部门表结构（id, name, code, type, parent_id, manager_id, description, sort_order, status, created_at, updated_at）
+    - 设计部门与员工关联关系
+    - 实现部门编码自动生成规则（分级编码如01-01-02）
+  - **组织架构管理功能**：
+    - 创建部门：填写部门名称、选择上级部门、设置部门类型、指定负责人
+    - 编辑部门：修改部门信息，调整上级部门（需校验层级限制）
+    - 删除部门：校验是否有下级部门或人员，支持逻辑删除
+    - 停用/启用部门：停用后禁止新增人员，保留历史数据
+  - **组织架构可视化**：
+    - 左侧树形结构展示完整组织架构
+    - 支持树节点的展开/折叠操作
+    - 支持部门搜索和快速定位
+    - 右侧展示选中部门详情和人员列表
+  - **部门人员管理**：
+    - 查看部门下所有员工列表
+    - 支持员工在部门间调动
+    - 显示部门人员统计信息
+- **Acceptance Criteria Addressed**: AC-9
+- **Test Requirements**:
+  - `programmatic` TR-18.1: 部门CRUD操作正常，数据完整性正确
+  - `programmatic` TR-18.2: 部门编码自动生成规则正确
+  - `programmatic` TR-18.3: 层级限制校验正确（最多5级）
+  - `programmatic` TR-18.4: 删除限制校验正确（有下级或人员不可删除）
+  - `programmatic` TR-18.5: 停用部门后禁止新增人员
+  - `programmatic` TR-18.6: 树形结构展示和交互正常
+  - `human-judgement` TR-18.7: 组织架构界面清晰直观
+- **Notes**:
+  - 部门编码需要保证唯一性
+  - 调整上级部门时需重新计算编码和层级
+  - 考虑大数据量时的树形结构性能优化
+
+## [ ] 任务 19: 员工账号管理模块 (v2.5新增)
+- **Priority**: P1
+- **Depends On**: 任务 18
+- **Description**:
+  - **员工数据模型设计**：
+    - 设计员工表结构（id, employee_no, name, gender, phone, email, department_id, position, level, role, status, entry_date, probation_end_date, resignation_date, avatar, password, last_login_time, created_at, updated_at）
+    - 设计员工登录日志表
+    - 设计员工操作日志表
+  - **员工账号生命周期管理**：
+    - 创建账号：填写员工信息，自动生成初始密码，支持发送通知
+    - 编辑信息：修改员工基本信息、职位、部门等
+    - 停用账号：员工离职时停用，保留数据
+    - 删除账号：彻底删除（仅超级管理员可操作）
+    - 批量导入：支持Excel模板批量导入员工信息
+  - **角色与权限管理**：
+    - 为员工分配系统角色（工程师/技术部长/业务员/系统管理员）
+    - 设置数据访问范围（全部/本部门/仅自己）
+    - 部门负责人自动继承部门管理权限
+  - **账号安全管理**：
+    - 密码复杂度校验（8位以上，包含大小写字母和数字）
+    - 密码重置功能，支持强制首次登录修改密码
+    - 登录锁定机制（连续5次失败锁定30分钟）
+    - 密码过期提醒和强制更换
+  - **入职/离职流程**：
+    - 入职登记：记录入职日期、试用期、合同信息
+    - 离职办理：记录离职日期、原因、工作交接
+    - 账号交接：工单、客户自动交接给指定人员
+  - **日志管理**：
+    - 登录日志：记录登录时间、IP、设备信息
+    - 操作日志：记录关键操作（密码修改、权限变更等）
+    - 日志查询：支持多条件查询和导出
+- **Acceptance Criteria Addressed**: AC-10
+- **Test Requirements**:
+  - `programmatic` TR-19.1: 员工账号CRUD操作正常
+  - `programmatic` TR-19.2: Excel批量导入功能正常
+  - `programmatic` TR-19.3: 角色权限分配正确
+  - `programmatic` TR-19.4: 密码复杂度校验正确
+  - `programmatic` TR-19.5: 登录锁定机制生效
+  - `programmatic` TR-19.6: 入职/离职流程完整
+  - `programmatic` TR-19.7: 日志记录完整准确
+  - `human-judgement` TR-19.8: 员工管理界面清晰易用
+- **Notes**:
+  - 工号需要保证唯一性，建议按规则自动生成
+  - 手机号和邮箱需要校验唯一性
+  - 离职交接需要事务处理，确保数据完整性
+  - 考虑批量操作时的性能优化
+
+## [x] 任务 20: 客户自主注册功能 (v2.6最终版 - 天眼查API方案)
+- **Priority**: P1
+- **Depends On**: 任务 2, 任务 3
+- **Status**: ✅ 已完成
+- **Description**:
+  - 开发客户注册页面（三步流程：搜索企业 → 确认信息 → 填写个人信息）
+  - 实现天眼查API企业搜索功能（输入关键词 → 调用API → 显示列表 → 选择企业）
+  - 实现企业信息自动填充（名称、信用代码、地址、法人、状态）
+  - 实现手动输入备用方案（天眼查未收录时）
+  - 实现联系人信息填写表单（姓名、手机号、职位、邮箱）
+  - 实现手机号短信验证码功能（60秒倒计时、防刷机制）
+  - 创建"待审核"客户账号和企业档案
+- **Acceptance Criteria Addressed**: AC-8
+- **Test Requirements**:
+  - `programmatic` TR-20.1: 天眼查API搜索功能正常，返回结果准确
+  - `programmatic` TR-20.2: 企业信息自动填充正确（名称、信用代码、地址、法人、状态）
+  - `programmatic` TR-20.3: 手动输入备用方案功能正常
+  - `programmatic` TR-20.4: 注册表单验证正确，必填项校验完整
+  - `programmatic` TR-20.5: 短信验证码发送和验证正常
+  - `programmatic` TR-20.6: 防刷机制生效（1分钟/次，10次/小时）
+  - `programmatic` TR-20.7: 注册成功后创建待审核账号
+  - `human-judgement` TR-20.8: 注册流程简洁，用户体验良好（三步完成）
+- **Notes**:
+  - ✅ 已完成开发，采用天眼查API搜索选择方案（终极防重复）
+  - 移动端优先设计，适配各种手机屏幕
+  - 实际项目中需申请天眼查API权限并配置Token
+  - 短信服务商需要提前配置
+
+## [x] 任务 21: 员工审核管理功能 (v2.6最终版 - 简化版)
+- **Priority**: P1
+- **Depends On**: 任务 20
+- **Status**: ✅ 已完成
+- **Description**:
+  - 开发审核工作台（待审核列表、统计看板、区分天眼查/手动数据）
+  - 实现审核详情页（企业信息展示、数据来源标记、系统内重复检测）
+  - 实现简化版审核操作：通过、拒绝、要求补充信息
+  - 实现审核分配机制（自动分配、手动分配）
+  - 实现审核提醒功能（超期提醒、新申请提醒、每日汇总）
+  - 开发企业信息管理功能（档案生成、分级）
+  - 实现审核日志记录和查询
+  - 实现审核数据统计（通过率、平均时长、天眼查/手动占比）
+- **Acceptance Criteria Addressed**: AC-11
+- **Test Requirements**:
+  - `programmatic` TR-21.1: 待审核列表展示正确，支持筛选排序，区分数据来源
+  - `programmatic` TR-21.2: 审核详情页企业信息展示正确，数据来源标记清晰
+  - `programmatic` TR-21.3: 系统内重复检测功能正常（通过信用代码）
+  - `programmatic` TR-21.4: 审核操作（通过/拒绝/补充）功能正常
+  - `programmatic` TR-21.5: 审核通过后账号激活并分配业务员
+  - `programmatic` TR-21.6: 审核提醒功能正常（超期、新申请、汇总）
+  - `programmatic` TR-21.7: 审核日志记录完整，支持查询
+  - `human-judgement` TR-21.8: 审核界面清晰，操作便捷
+- **Notes**:
+  - ✅ 已完成开发，审核内容简化（天眼查数据主要审核联系人身份）
+  - 移除"合并企业"操作（天眼查方案下重复概率极低）
+  - 审核时效：天眼查数据1-2个工作日，手动录入3-5个工作日
+- **Notes**:
+  - 审核权限需要控制，只有业务员/客服专员/管理员可审核
+  - 企业合并需要谨慎处理，避免数据丢失
+  - 审核通知需要接入企业微信消息推送
