@@ -100,14 +100,14 @@
               <el-button v-if="canAcceptWorkorder(currentUserRole, order, currentUserId)" type="primary" size="small" @click.stop="acceptWorkorder(order)">接单</el-button>
               <el-button v-if="canRejectWorkorder(currentUserRole, order, currentUserId)" type="warning" size="small" @click.stop="rejectOrder(order)">弃单</el-button>
             </template>
-            <!-- 进行中：工程师处理 -->
-            <el-button v-if="canSubmitForSign(currentUserRole, order, currentUserId)" type="success" size="small" @click.stop="goToProcess(order)">处理</el-button>
-            <!-- 待签字：工程师操作签字 -->
-            <el-button v-if="canSignWorkorder(currentUserRole, order, currentUserId)" type="warning" size="small" @click.stop="goToSign(order)">签字</el-button>
-            <!-- 课长确认 -->
-            <el-button v-if="canTechLeadConfirm(currentUserRole)" type="primary" size="small" @click.stop="techLeadConfirmMobile(order)">确认</el-button>
-            <!-- 业务确认 -->
-            <el-button v-if="canAssistantConfirm(currentUserRole)" type="primary" size="small" @click.stop="assistantConfirmMobile(order)">确认</el-button>
+            <!-- 进行中：工程师处理（仅进行中状态显示） -->
+            <el-button v-if="order.status === 'processing' && canSubmitForSign(currentUserRole, order, currentUserId)" type="success" size="small" @click.stop="goToProcess(order)">处理</el-button>
+            <!-- 待签字：工程师操作签字（仅待签字状态显示） -->
+            <el-button v-if="order.status === 'pending_sign' && canSignWorkorder(currentUserRole, order, currentUserId)" type="warning" size="small" @click.stop="goToSign(order)">签字</el-button>
+            <!-- 课长确认（仅课长确认状态显示） -->
+            <el-button v-if="order.status === 'techlead_confirm' && canTechLeadConfirm(currentUserRole)" type="primary" size="small" @click.stop="techLeadConfirmMobile(order)">确认</el-button>
+            <!-- 业务确认（仅业务确认状态显示） -->
+            <el-button v-if="order.status === 'assistant_confirm' && canAssistantConfirm(currentUserRole)" type="primary" size="small" @click.stop="assistantConfirmMobile(order)">确认</el-button>
           </div>
         </div>
       </div>

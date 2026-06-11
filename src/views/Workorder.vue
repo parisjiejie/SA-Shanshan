@@ -629,7 +629,7 @@ import {
   submitWorkorderQuotationForApproval,
   approveWorkorderQuotation
 } from '../stores/quotationStore.js'
-import { WorkorderCategory, WorkorderCategoryText, WorkorderSubType, WorkorderSubTypeText, WorkorderStatus, WorkorderStatusText, WorkorderFlowSteps, getCurrentStepIndex, getFlowStatusText, getFlowStatusType, state as workorderFlowState, createNotification, createWorkorder, rejectWorkorder, assignWorkorder, acceptWorkorder, techLeadConfirm as doTechLeadConfirm, assistantConfirm as doAssistantConfirm, canAssignWorkorder, canAcceptWorkorder, canRejectWorkorder, canSubmitForSign, canSignWorkorder, canTechLeadConfirm, canAssistantConfirm, canCompleteDirectly } from '../stores/workorderFlowStore.js'
+import { WorkorderCategory, WorkorderCategoryText, WorkorderSubType, WorkorderSubTypeText, WorkorderStatus, WorkorderStatusText, WorkorderFlowSteps, getCurrentStepIndex, getFlowStatusText, getFlowStatusType, state as workorderFlowState, createNotification, createWorkorder, saveToStorage, rejectWorkorder, assignWorkorder, acceptWorkorder, techLeadConfirm as doTechLeadConfirm, assistantConfirm as doAssistantConfirm, canAssignWorkorder, canAcceptWorkorder, canRejectWorkorder, canSubmitForSign, canSignWorkorder, canTechLeadConfirm, canAssistantConfirm, canCompleteDirectly } from '../stores/workorderFlowStore.js'
 
 export default {
   name: 'Workorder',
@@ -799,96 +799,62 @@ export default {
       { serialNumber: 'SN003', model: 'Model C' }
     ])
 
-    // 强制刷新计数器
-    const refreshKey = ref(0)
-
-    // 工单列表 - 从 workorderFlowStore 加载（computed 自动响应）
-    const workorders = computed(() => {
-      void refreshKey.value
-      const raw = [...workorderFlowState.workorders]
+    // 工单列表（单一 computed，直接从 store reactive 数组读取，自动响应变化）
+    const filteredWorkorders = computed(() => {
+      const source = workorderFlowState.workorders
+      let list = [...source]
         .sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-      const mapped = raw.map(w => ({
-        id: w.workorderId || w.id,
-        rawId: w.id,
-        category: w.category || 'service',
-        subType: w.subType || 'repair',
-        customerName: w.customerName,
-        assetSerialNumber: w.serialNumber,
-        status: w.status,
-        flowStatus: w.status,
-        createTime: w.createTime,
-        assignEngineer: w.engineerName || '',
-        faultDescription: w.faultDescription,
-        address: w.address,
-        customerPhone: w.customerPhone,
-        warrantyStatus: w.warrantyStatus,
-        processRecords: w.processRecords || [],
-        createdBy: w.createdBy || { role: 'customer', name: w.customerName },
-        partsList: w.partsList || [],
-        totalCostAmount: w.totalCostAmount || 0,
-        totalSaleAmount: w.totalSaleAmount || 0,
-        totalProfitMargin: w.totalProfitMargin || 0,
-        reportPdf: w.reportPdf
-      }))
-      if (mapped.length === 0) {
-        return [
-          {
-            id: 'WO001',
-            type: '维修',
-            customerName: '上海某机械有限公司',
-            assetSerialNumber: 'SN001',
-            status: '已完成',
-            flowStatus: 'completed',
-            createTime: '2026-02-01 10:00:00',
-            assignEngineer: '王工程师'
-          },
-          {
-            id: 'WO002',
-            type: '巡检',
-            customerName: '北京某设备制造有限公司',
-            assetSerialNumber: 'SN002',
-            status: '进行中',
-            flowStatus: 'processing',
-            createTime: '2026-02-15 14:00:00',
-            assignEngineer: '李工程师'
-          }
+        .map(w => ({
+          id: w.workorderId || w.id,
+          rawId: w.id,
+          category: w.category || 'service',
+          subType: w.subType || 'repair',
+          customerName: w.customerName,
+          assetSerialNumber: w.serialNumber,
+          status: w.status,
+          flowStatus: w.status,
+          createTime: w.createTime,
+          assignEngineer: w.engineerName || '',
+          faultDescription: w.faultDescription,
+          address: w.address,
+          customerPhone: w.customerPhone,
+          warrantyStatus: w.warrantyStatus,
+          processRecords: w.processRecords || [],
+          createdBy: w.createdBy || { role: 'customer', name: w.customerName },
+          partsList: w.partsList || [],
+          totalCostAmount: w.totalCostAmount || 0,
+          totalSaleAmount: w.totalSaleAmount || 0,
+          totalProfitMargin: w.totalProfitMargin || 0,
+          reportPdf: w.reportPdf
+        }))
+
+      if (list.length === 0) {
+        list = [
+          { id: 'WO001', type: '维修', customerName: '上海某机械有限公司', assetSerialNumber: 'SN001', status: '已完成', flowStatus: 'completed', createTime: '2026-02-01 10:00:00', assignEngineer: '王工程师' },
+          { id: 'WO002', type: '巡检', customerName: '北京某设备制造有限公司', assetSerialNumber: 'SN002', status: '进行中', flowStatus: 'processing', createTime: '2026-02-15 14:00:00', assignEngineer: '李工程师' }
         ]
       }
-      return mapped
-    })
-
-    const loadWorkordersFromStore = () => { refreshKey.value++ }
-
-    // 获取URL参数中的工单类型
-    const currentType = ref('')
-    // 过滤工单列表
-    const filteredWorkorders = ref([])
-
-    const filterWorkorders = () => {
-      let filtered = workorders.value
 
       if (filterCategory.value) {
-        filtered = filtered.filter(w => w.category === filterCategory.value)
+        list = list.filter(w => w.category === filterCategory.value)
         if (filterSubType.value && filterCategory.value === 'service') {
-          filtered = filtered.filter(w => w.subType === filterSubType.value)
+          list = list.filter(w => w.subType === filterSubType.value)
         }
       }
-
       if (workorderStatus.value) {
-        filtered = filtered.filter(w => w.status === workorderStatus.value)
+        list = list.filter(w => w.status === workorderStatus.value)
       }
-
       if (searchQuery.value) {
         const q = searchQuery.value.toLowerCase()
-        filtered = filtered.filter(w =>
-          (w.id && w.id.toLowerCase().includes(q)) ||
-          (w.customerName && w.customerName.includes(q))
-        )
+        list = list.filter(w => (w.id && w.id.toLowerCase().includes(q)) || (w.customerName && w.customerName.includes(q)))
       }
 
-      filtered = filtered.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-      filteredWorkorders.value = filtered
-      total.value = filtered.length
+      total.value = list.length
+      return list
+    })
+
+    const loadWorkordersFromStore = () => {
+      // computed 已自动响应 store 变化，此函数保留仅用于接口兼容
     }
 
     // 监听路由变化，更新当前工单类型筛选
@@ -897,20 +863,8 @@ export default {
         filterCategory.value = newType
         filterSubType.value = ''
       }
-      filterWorkorders()
     }, { immediate: true })
 
-    watch([filterCategory, filterSubType, workorderStatus], () => {
-      filterWorkorders()
-    })
-
-    // 监听工单数据变化，重新过滤
-    watch(workorders, () => {
-      filterWorkorders()
-    }, { deep: true })
-
-    // 初始过滤
-    filterWorkorders()
 
     const addPart = () => {
       form.partsList.push({
@@ -1096,9 +1050,9 @@ export default {
       ElMessage.success(`工单状态已更新：${getFlowStatusText(updatedWorkorder.flowStatus)}`)
     }
     
-    // 刷新数据
+    // 刷新数据（computed 已自动响应 store 变化）
     const handleRefresh = () => {
-      refreshKey.value++
+      ElMessage.success('数据已刷新')
     }
 
     // 管理员直接完成工单
@@ -1107,8 +1061,8 @@ export default {
       if (wo) {
         wo.status = 'completed'
         wo.completeTime = new Date().toISOString()
+        saveToStorage()
         ElMessage.success('工单已完成')
-        refreshKey.value++
         detailVisible.value = false
       }
     }
@@ -1343,12 +1297,13 @@ export default {
       const index = workorders.value.findIndex(w => w.id === id)
       if (index !== -1) {
         workorders.value.splice(index, 1)
-        // 同步删除 store 中的工单
         const storeWo = workorderFlowState.workorders.find(w => w.workorderId === id || w.id === id)
         if (storeWo) {
           const storeIdx = workorderFlowState.workorders.indexOf(storeWo)
           if (storeIdx !== -1) workorderFlowState.workorders.splice(storeIdx, 1)
         }
+        saveToStorage()
+        ElMessage.success('工单已删除')
       }
     }
 
@@ -1424,7 +1379,7 @@ export default {
             totalSaleAmount: form.totalSaleAmount || 0,
             totalProfitMargin: form.totalProfitMargin || 0
           }, currentUserRole.value, currentUserName.value)
-          console.log('[Workorder] createWorkorder 完成')
+          console.log('[Workorder] createWorkorder 完成, store 中共', workorderFlowState.workorders.length, '条工单')
           ElMessage.success('工单创建成功')
           loadWorkordersFromStore()
         } else {
@@ -1437,6 +1392,8 @@ export default {
             workorderFlowState.workorders[idx].engineerName = form.assignEngineer
             workorderFlowState.workorders[idx].status = form.status
             workorderFlowState.workorders[idx].faultDescription = form.description
+            saveToStorage()
+            console.log('[Workorder] 工单编辑已保存, store 中共', workorderFlowState.workorders.length, '条')
             ElMessage.success('工单更新成功')
             loadWorkordersFromStore()
           }
@@ -2035,7 +1992,6 @@ export default {
       currentQuotation,
       customers,
       assets,
-      workorders,
       filteredWorkorders,
       tableColumns,
       currentContact,

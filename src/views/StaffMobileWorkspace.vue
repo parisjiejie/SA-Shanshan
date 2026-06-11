@@ -254,7 +254,7 @@
             <el-icon><Document /></el-icon>
             <el-badge v-if="stats.pending > 0 && isManager" :value="stats.pending" class="action-badge" />
           </div>
-          <span class="action-label">{{ hasTeamAccess ? '团队工单' : (isManager ? '我的工单' : '发起工单') }}</span>
+          <span class="action-label">{{ hasTeamAccess ? '团队工单' : '我的工单' }}</span>
           <span class="action-desc">{{ hasTeamAccess ? '查看团队工单' : (isManager ? '查看我的工单' : '创建新工单') }}</span>
         </div>
         
@@ -791,12 +791,12 @@ const goToWorkorders = (filter) => {
 
 // 处理工单按钮点击
 const handleWorkorderClick = () => {
-  if (isManager.value) {
+  if (hasTeamAccess.value || isManager.value) {
     // 课长/经理查看团队工单
     router.push('/staff-workorder-list?filter=all')
   } else {
-    // 工程师发起新工单
-    router.push('/staff-workorder-create')
+    // 工程师查看自己的工单
+    router.push('/staff-workorder-list?filter=mine')
   }
 }
 

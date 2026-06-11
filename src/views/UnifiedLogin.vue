@@ -155,7 +155,7 @@ const roles = [
     icon: 'OfficeBuilding',
     color: '#409eff',
     tagType: 'primary',
-    redirect: '/dashboard'
+    redirect: '/staff-mobile-workspace'
   },
   {
     key: 'assistant',
@@ -166,7 +166,7 @@ const roles = [
     icon: 'User',
     color: '#67c23a',
     tagType: 'success',
-    redirect: '/dashboard'
+    redirect: '/staff-mobile-workspace'
   },
   {
     key: 'engineer',
@@ -188,7 +188,7 @@ const roles = [
     icon: 'Avatar',
     color: '#f56c6c',
     tagType: 'danger',
-    redirect: '/dashboard'
+    redirect: '/staff-mobile-workspace'
   },
   {
     key: 'director',
@@ -199,7 +199,7 @@ const roles = [
     icon: 'Monitor',
     color: '#9254de',
     tagType: '',
-    redirect: '/dashboard'
+    redirect: '/staff-mobile-workspace'
   },
   {
     key: 'customer',

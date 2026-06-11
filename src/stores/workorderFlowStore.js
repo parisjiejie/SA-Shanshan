@@ -4,7 +4,7 @@
  * 类型体系：category(installation/service) + subType(repair/trial_processing/refitting)
  */
 
-import { reactive } from 'vue'
+import { reactive, toRaw } from 'vue'
 import { addNotification, NotificationType } from './notificationStore'
 
 // ==================== 工单类型枚举 ====================
@@ -80,6 +80,9 @@ const loadFromStorage = () => {
       const d = JSON.parse(saved)
       state.workorders = d.workorders || []
       state.notifications = d.notifications || []
+      console.log('[store] loadFromStorage: 从 localStorage 加载', d.workorders?.length || 0, '条工单')
+    } else {
+      console.log('[store] loadFromStorage: localStorage 中无数据，将初始化 mock 数据')
     }
   } catch (e) { console.error('加载工单流程数据失败:', e) }
   if (state.workorders.length === 0) {
@@ -88,8 +91,13 @@ const loadFromStorage = () => {
 }
 
 const saveToStorage = () => {
-  try { localStorage.setItem('workorderFlowData', JSON.stringify({ workorders: state.workorders, notifications: state.notifications })) }
-  catch (e) { console.error('保存工单流程数据失败:', e) }
+  try {
+    const rawWorkorders = toRaw(state.workorders).map(w => toRaw(w))
+    const rawNotifications = toRaw(state.notifications).map(n => toRaw(n))
+    const data = { workorders: rawWorkorders, notifications: rawNotifications }
+    localStorage.setItem('workorderFlowData', JSON.stringify(data))
+    console.log('[store] saveToStorage: 已保存', rawWorkorders.length, '条工单,', rawNotifications.length, '条通知')
+  } catch (e) { console.error('保存工单流程数据失败:', e) }
 }
 
 const generateWorkorderId = () => {
@@ -398,18 +406,12 @@ const getVisibleWorkorders = (user) => {
   if (role === 'admin' || role === 'director') return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
   // techLead 看全部（负责分配和确认所有工单）
   if (role === 'techLead') return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  // engineer 只看分配给自己或自己创建的
+  // assistant 看全部工单
+  if (role === 'assistant') return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
+  // engineer 只看分配给自己的
   if (role === 'engineer') {
     return state.workorders.filter(w =>
-      w.engineerId === userId || w.engineerName === userName ||
-      (w.createdBy && (w.createdBy.name === userName || w.createdBy.role === 'engineer'))
-    ).sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  }
-  // assistant 只看自己创建的 + 待业务确认的
-  if (role === 'assistant') {
-    return state.workorders.filter(w =>
-      (w.createdBy && (w.createdBy.role === 'assistant' || w.createdBy.name === userName)) ||
-      w.status === 'assistant_confirm'
+      w.engineerId === userId || w.engineerName === userName
     ).sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
   }
   // customer 只看跟自己有关的
@@ -486,11 +488,12 @@ const checkTimeoutAlarms = () => {
     if (w.status === WorkorderStatus.PENDING_ACCEPT && w.assignTime) {
       if (now - new Date(w.assignTime).getTime() > TWO_HOURS && !w._alarmAcceptSent) {
         w._alarmAcceptSent = true
-        ;['techLead','director'].forEach(role => {
-          addNotification({ type: NotificationType.TIMEOUT_ALARM, level: 'action', title: '超时报警',
-            content: `工单 ${w.workorderId} 已超过2小时未被工程师接单`, targetRole: role,
-            jumpPath: '/workorder', relatedId: w.workorderId })
-        })
+        addNotification({ type: NotificationType.TIMEOUT_ALARM, level: 'action', title: '超时报警',
+          content: `工单 ${w.workorderId} 已超过2小时未被工程师接单`, targetRole: 'engineer',
+          jumpPath: '/staff-workorder-list', relatedId: w.workorderId, targetUserId: w.engineerId })
+        addNotification({ type: NotificationType.TIMEOUT_ALARM, level: 'action', title: '超时报警',
+          content: `工单 ${w.workorderId} 已超过2小时未被接单，请关注`, targetRole: 'techLead',
+          jumpPath: '/workorder', relatedId: w.workorderId })
       }
     }
   })
@@ -602,7 +605,7 @@ export const Roles = {
 
 // ==================== 统一角色权限校验 ====================
 export const canCreateWorkorder = (role) =>
-  [Roles.ADMIN, Roles.ASSISTANT, Roles.ENGINEER, Roles.TECH_LEAD, Roles.SALES].includes(role)
+  [Roles.ADMIN, Roles.ASSISTANT, Roles.CUSTOMER].includes(role)
 
 export const canAssignWorkorder = (role, workorder) => {
   if ([Roles.ADMIN, Roles.TECH_LEAD].includes(role)) return true
@@ -698,7 +701,7 @@ export const stopTimeoutChecker = () => {
 export {
   state, createWorkorder, assignWorkorder, rejectWorkorder, acceptWorkorder,
   submitForSign, signWorkorder, techLeadConfirm, assistantConfirm,
-  saveServiceReportDraft, saveReportPdf,
+  saveToStorage, saveServiceReportDraft, saveReportPdf,
   getEngineerWorkorders, getWorkorderById, getVisibleWorkorders, getCustomerWorkorders,
   getPendingAssignWorkorders, getTechLeadPendingWorkorders,
   getPendingAcceptWorkorders, getProcessingWorkorders, getPendingSignWorkorders,

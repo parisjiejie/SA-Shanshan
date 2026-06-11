@@ -18,7 +18,7 @@
             <el-menu
               :default-active="activeMenu"
               class="el-menu-vertical-demo"
-              @select="handleMenuSelect"
+              router
             >
               <el-menu-item v-if="isMenuVisible('/dashboard')" index="/dashboard">
                 <el-icon><PieChart /></el-icon>
@@ -134,6 +134,7 @@
             <el-menu
               :default-active="activeMenu"
               class="el-menu-vertical-demo"
+              router
               @select="handleMobileMenuSelect"
             >
               <el-menu-item v-if="isMenuVisible('/dashboard')" index="/dashboard">
@@ -296,8 +297,8 @@
             </div>
           </el-header>
           <el-main class="main">
-          <router-view :key="$route.fullPath" />
-        </el-main>
+            <router-view :key="viewRefreshKey" />
+          </el-main>
         </div>
       </template>
     </template>
@@ -363,6 +364,7 @@ export default {
     const router = useRouter()
     const route = useRoute()
     const activeMenu = ref('/dashboard')
+    const viewRefreshKey = ref(0)
     const isSidebarOpen = ref(false)
     const showNotifications = ref(false)
     const notificationUnreadCount = computed(() => 
@@ -513,12 +515,8 @@ export default {
       return roleMenus[currentUser.value.role]?.includes(menuKey) || false
     }
 
-    const handleMenuSelect = (key) => {
-      router.push(key)
-    }
-
     const handleMobileMenuSelect = (key) => {
-      router.push(key)
+      // router 属性已处理导航，这里只需关闭侧边栏
       isSidebarOpen.value = false
     }
 
@@ -553,8 +551,8 @@ export default {
         // 强制跳转到客户手机端工作台，替换当前历史记录
         window.location.href = '/customer-workspace'
       } else {
-        // 其他角色跳转到桌面端首页
-        router.push('/dashboard')
+        // 其他角色跳转到手机端首页
+        router.push('/staff-mobile-workspace')
       }
     }
 
@@ -609,22 +607,23 @@ export default {
       }
     }
 
-    // 监听路由变化，更新激活菜单，并重新读取用户信息（解决 pushState 导航不触发 remount 的问题）
-    watch(() => route.path, (newPath) => {
-      activeMenu.value = newPath
-      if (!publicPages.includes(newPath) && !route.meta?.public) {
+    // 监听路由变化，更新激活菜单和视图刷新key（解决 pushState 导航不触发重渲染的问题）
+    watch(() => route.fullPath, (newFullPath) => {
+      activeMenu.value = newFullPath
+      viewRefreshKey.value++
+      if (!publicPages.includes(route.path) && !route.meta?.public) {
         loadUserFromStorage()
       }
     })
 
     onMounted(() => {
-      activeMenu.value = route.path
+      activeMenu.value = route.fullPath
       loadUserFromStorage()
     })
 
     return {
       activeMenu,
-      handleMenuSelect,
+      viewRefreshKey,
       handleMobileMenuSelect,
       isSidebarOpen,
       toggleSidebar,
