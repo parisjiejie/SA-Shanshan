@@ -19,10 +19,15 @@
               :default-active="activeMenu"
               class="el-menu-vertical-demo"
               router
+              @select="handleMenuSelect"
             >
               <el-menu-item v-if="isMenuVisible('/dashboard')" index="/dashboard">
                 <el-icon><PieChart /></el-icon>
-                <span>数据看板</span>
+                <span>工作台</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/bi-dashboard')" index="/bi-dashboard">
+                <el-icon><DataLine /></el-icon>
+                <span>BI大屏</span>
               </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/customer')" index="/customer">
                 <el-icon><User /></el-icon>
@@ -139,7 +144,11 @@
             >
               <el-menu-item v-if="isMenuVisible('/dashboard')" index="/dashboard">
                 <el-icon><PieChart /></el-icon>
-                <span>数据看板</span>
+                <span>工作台</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/bi-dashboard')" index="/bi-dashboard">
+                <el-icon><DataLine /></el-icon>
+                <span>BI大屏</span>
               </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/customer')" index="/customer">
                 <el-icon><User /></el-icon>
@@ -329,7 +338,7 @@ import { ElMessage } from 'element-plus'
 import { 
   PieChart, User, Monitor, Document, Location, Box, 
   Setting, ArrowDown, Menu, Phone, CircleCheck, Money, Search, DocumentChecked, Camera,
-  Cellphone, Monitor as MonitorIcon, Bell
+  Cellphone, Monitor as MonitorIcon, Bell, DataLine
 } from '@element-plus/icons-vue'
 import { pendingApprovalCount } from './stores/approvalStore'
 import { pendingApprovalCount as pendingUserApprovalCount } from './stores/userApprovalStore'
@@ -343,6 +352,7 @@ export default {
     PieChart,
     User,
     Monitor,
+    DataLine,
     Document,
     Location,
     Box,
@@ -412,6 +422,7 @@ export default {
     const roleMenus = {
       admin: [
         '/dashboard',
+        '/bi-dashboard',
         '/customer',
         '/asset',
         'workorder',
@@ -447,6 +458,7 @@ export default {
       ],
       assistant: [
         '/dashboard',
+        '/bi-dashboard',
         '/customer',
         '/asset',
         'workorder',
@@ -470,6 +482,7 @@ export default {
       ],
       techLead: [
         '/dashboard',
+        '/bi-dashboard',
         '/customer',
         '/asset',
         'workorder',
@@ -483,6 +496,7 @@ export default {
       ],
       director: [
         '/dashboard',
+        '/bi-dashboard',
         '/customer',
         '/asset',
         'workorder',
@@ -515,8 +529,24 @@ export default {
       return roleMenus[currentUser.value.role]?.includes(menuKey) || false
     }
 
+    // 打开BI大屏（新标签页）
+    const openBIDashboard = () => {
+      window.open('http://bi-demo.fastma.com.cn/bi_akl/akl_home.html', '_blank')
+    }
+
+    // PC端菜单选择处理
+    const handleMenuSelect = (key) => {
+      if (key === '/bi-dashboard') {
+        window.location.href = 'http://bi-demo.fastma.com.cn/bi_akl/akl_home.html'
+        return false
+      }
+    }
+
     const handleMobileMenuSelect = (key) => {
-      // router 属性已处理导航，这里只需关闭侧边栏
+      if (key === '/bi-dashboard') {
+        window.location.href = 'http://bi-demo.fastma.com.cn/bi_akl/akl_home.html'
+        return false
+      }
       isSidebarOpen.value = false
     }
 
@@ -629,6 +659,8 @@ export default {
       toggleSidebar,
       currentUser,
       isMenuVisible,
+      openBIDashboard,
+      handleMenuSelect,
       handleRoleChange,
       pendingApprovalCount,
       pendingApprovalBadge,

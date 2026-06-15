@@ -159,7 +159,8 @@ export default {
             }
             localStorage.setItem('userInfo', JSON.stringify({
               name: account.name,
-              role: roleMapping[account.role],
+              role: account.role,
+              roleDisplay: roleMapping[account.role],
               department: '技术服务部'
             }))
 

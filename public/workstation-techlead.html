@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SA - 课长工作台（临时方案 v2）</title>
+<link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+<style>
+  :root {
+    --sidebar-w: 220px;
+    --header-h: 56px;
+    --primary: #409eff;
+    --bg: #f0f2f5;
+    --card-bg: #fff;
+    --border: #e4e7ed;
+    --text: #303133;
+    --text-secondary: #606266;
+    --text-muted: #909399;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Microsoft YaHei', 'PingFang SC', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  
+  /* ========== 顶部栏 ========== */
+  .app-header {
+    height: var(--header-h); background: #fff; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; position: sticky; top: 0; z-index: 100;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .header-left { display:flex; align-items:center; gap:12px; }
+  .header-left .sys-name { font-size: 16px; font-weight: 700; color: var(--primary); letter-spacing: 1px; }
+  .header-left .sys-divider { width:1px; height:20px; background:var(--border); }
+  .header-left .sys-sub { font-size: 13px; color: var(--text-secondary); }
+  .header-right { display:flex; align-items:center; gap:18px; }
+  .notify-btn {
+    position:relative; width:36px; height:36px; border-radius:8px; border:none;
+    background: #f5f7fa; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    font-size:18px; color: var(--text-secondary); transition: all 0.2s;
+  }
+  .notify-btn:hover { background: #e8edf2; color: var(--primary); }
+  .notify-btn .badge {
+    position:absolute; top:-4px; right:-4px; min-width:18px; height:18px;
+    background:#f56c6c; border-radius:9px; color:#fff; font-size:11px;
+    display:flex; align-items:center; justify-content:center; padding:0 5px;
+    font-weight:600; box-shadow: 0 0 0 2px #fff;
+  }
+  .user-chip {
+    display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 12px 4px 4px;
+    border-radius:20px; transition:background 0.15s;
+  }
+  .user-chip:hover { background: #f5f7fa; }
+  .user-chip .avatar {
+    width:32px; height:32px; border-radius:50%; background: linear-gradient(135deg, var(--primary), #66b1ff);
+    color:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600;
+  }
+  .user-chip .user-name { font-size:13px; color: var(--text-secondary); }
+  .user-chip .user-role { font-size:11px; color: var(--text-muted); }
+  .user-chip .arrow-down { font-size:12px; color: var(--text-muted); }
+
+  /* ========== 布局 ========== */
+  .app-layout { display:flex; min-height:calc(100vh - var(--header-h)); }
+  
+  /* ========== 侧边栏 ========== */
+  .sidebar {
+    width: var(--sidebar-w); background: #fff; border-right: 1px solid var(--border);
+    display:flex; flex-direction:column; padding: 8px 0; flex-shrink:0;
+    overflow-y:auto;
+  }
+  .sidebar .menu-group { padding: 14px 20px 6px; font-size:11px; color: var(--text-muted); font-weight:600; letter-spacing: 1px; text-transform: uppercase; }
+  .sidebar .menu-item {
+    height:42px; display:flex; align-items:center; padding:0 20px; cursor:pointer;
+    color: var(--text-secondary); font-size:14px; gap:10px; transition:all 0.15s;
+    border-left:3px solid transparent; margin:2px 0; text-decoration:none;
+  }
+  .sidebar .menu-item:hover { background: #f5f7fa; color: var(--primary); }
+  .sidebar .menu-item.active { background: #ecf5ff; color: var(--primary); border-left-color: var(--primary); font-weight:600; }
+  .sidebar .menu-item .mi-icon { font-size:17px; width:20px; text-align:center; flex-shrink:0; }
+  .sidebar .menu-item .mi-badge { margin-left:auto; }
+
+  /* ========== 主内容 ========== */
+  .main-content { flex:1; padding: 24px; overflow-y:auto; }
+
+  /* ========== 工作台标题区 ========== */
+  .ws-header { margin-bottom: 24px; }
+  .ws-header h1 { font-size: 22px; font-weight: 700; color: var(--text); display:flex; align-items:center; gap: 10px; }
+  .ws-header h1 .dot { width:6px; height:22px; background: var(--primary); border-radius:3px; }
+  .ws-header .greeting { font-size:13px; color: var(--text-muted); margin-top:6px; display:flex; align-items:center; gap:6px; }
+  .ws-header .greeting .weather { display:inline-flex; align-items:center; gap:4px; background:#f5f7fa; padding:2px 8px; border-radius:4px; font-size:12px; }
+
+  /* ========== 统计概览条 ========== */
+  .stats-row {
+    display:flex; gap:16px; margin-bottom: 24px;
+  }
+  .stats-item {
+    flex:1; background: var(--card-bg); border-radius: 10px; padding: 16px 20px;
+    border:1px solid #ebeef5; display:flex; align-items:center; gap:14px;
+    transition: all 0.2s; cursor:pointer; min-width:0;
+  }
+  .stats-item:hover { border-color: var(--primary); box-shadow: 0 4px 14px rgba(64,158,255,0.1); }
+  .stats-item .si-icon-wrap {
+    width:46px; height:46px; border-radius:12px; display:flex;
+    align-items:center; justify-content:center; font-size:24px; flex-shrink:0;
+  }
+  .stats-item .si-num { font-size: 26px; font-weight: 700; line-height:1; }
+  .stats-item .si-label { font-size: 12px; color: var(--text-muted); margin-top:2px; }
+
+  /* ========== 待办卡片 ========== */
+  .section-label {
+    display:flex; align-items:center; gap:8px; margin-bottom:14px;
+    font-size:14px; font-weight:600; color: var(--text);
+  }
+  .section-label::before { content:''; width:4px; height:16px; background:var(--primary); border-radius:2px; }
+  .todo-grid {
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap:14px; margin-bottom: 24px;
+  }
+  .todo-card {
+    background: var(--card-bg); border:1px solid #ebeef5; border-radius:10px;
+    padding:18px 20px; cursor:pointer; transition:all 0.2s;
+    display:flex; align-items:center; gap:14px;
+  }
+  .todo-card:hover { border-color: var(--primary); box-shadow: 0 4px 14px rgba(64,158,255,0.1); transform: translateY(-2px); }
+  .todo-card .tc-icon {
+    width:48px; height:48px; border-radius:12px; display:flex;
+    align-items:center; justify-content:center; font-size:22px; flex-shrink:0;
+  }
+  .todo-card .tc-body { flex:1; min-width:0; }
+  .todo-card .tc-label { font-size:12px; color: var(--text-muted); }
+  .todo-card .tc-count { font-size:28px; font-weight:700; line-height:1.2; margin:2px 0; }
+  .todo-card .tc-action { font-size:12px; font-weight:500; }
+  .todo-card .tc-arrow { font-size:20px; color:#c0c4cc; flex-shrink:0; }
+
+  .todo-card.assign .tc-icon { background:#fff3e0; color:#ff9800; } .todo-card.assign .tc-count { color:#ff9800; } .todo-card.assign .tc-action { color:#ff9800; }
+  .todo-card.confirm .tc-icon { background:#e8f5e9; color:#4caf50; } .todo-card.confirm .tc-count { color:#4caf50; } .todo-card.confirm .tc-action { color:#4caf50; }
+  .todo-card.reject .tc-icon { background:#fce4ec; color:#e91e63; } .todo-card.reject .tc-count { color:#e91e63; } .todo-card.reject .tc-action { color:#e91e63; }
+  .todo-card.quote .tc-icon { background:#e3f2fd; color:#1976d2; } .todo-card.quote .tc-count { color:#1976d2; } .todo-card.quote .tc-action { color:#1976d2; }
+  .todo-card.checkin .tc-icon { background:#f3e5f5; color:#9c27b0; } .todo-card.checkin .tc-count { color:#9c27b0; } .todo-card.checkin .tc-action { color:#9c27b0; }
+
+  /* ========== 快捷操作 ========== */
+  .quick-grid {
+    display:grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap:12px; margin-bottom:24px;
+  }
+  .quick-card {
+    background:var(--card-bg); border:1px solid #ebeef5; border-radius:10px;
+    padding:18px 14px; text-align:center; cursor:pointer; transition:all 0.2s;
+  }
+  .quick-card:hover { border-color:var(--primary); box-shadow:0 2px 10px rgba(64,158,255,0.08); background:#fafcff; }
+  .quick-card .qc-icon { font-size:30px; margin-bottom:8px; }
+  .quick-card .qc-label { font-size:13px; font-weight:500; color:var(--text); }
+  .quick-card .qc-desc { font-size:11px; color:var(--text-muted); margin-top:3px; }
+
+  /* ========== 底部双栏 ========== */
+  .bottom-dual {
+    display:grid; grid-template-columns: 1fr 1fr; gap:16px;
+  }
+  .panel {
+    background:var(--card-bg); border:1px solid #ebeef5; border-radius:10px; padding:18px 20px;
+  }
+  .panel .panel-title {
+    font-size:14px; font-weight:600; color:var(--text);
+    margin-bottom:14px; display:flex; align-items:center; gap:8px;
+  }
+  .panel .panel-title .num { font-size:11px; color:var(--text-muted); font-weight:400; }
+
+  .order-row {
+    display:flex; align-items:center; padding:10px 0; border-bottom:1px solid #f5f7fa;
+    gap:12px; cursor:pointer; transition:background 0.15s;
+  }
+  .order-row:hover { background:#fafafa; margin:0 -8px; padding:10px 8px; border-radius:4px; }
+  .order-row:last-child { border-bottom:none; }
+  .order-row .or-id { font-weight:600; font-size:13px; color:var(--text); min-width:105px; font-family: 'SF Mono', 'Consolas', monospace; }
+  .order-row .or-cust { font-size:13px; color:var(--text-secondary); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .order-row .or-time { font-size:12px; color:var(--text-muted); white-space:nowrap; }
+  .tag {
+    font-size:11px; padding:2px 8px; border-radius:4px; white-space:nowrap; font-weight:500;
+  }
+  .tag--warn { background:#fff3e0; color:#ff9800; }
+  .tag--danger { background:#fce4ec; color:#e91e63; }
+  .tag--success { background:#e8f5e9; color:#4caf50; }
+  .tag--primary { background:#e3f2fd; color:#1976d2; }
+
+  .eng-row {
+    display:flex; align-items:center; padding:10px 0; border-bottom:1px solid #f5f7fa; gap:12px;
+  }
+  .eng-row:last-child { border-bottom:none; }
+  .eng-row .eng-avatar {
+    width:32px; height:32px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:12px; color:#fff; font-weight:600; flex-shrink:0;
+  }
+  .eng-row .eng-info { flex:1; min-width:0; }
+  .eng-row .eng-name { font-size:13px; font-weight:500; color:var(--text); }
+  .eng-row .eng-tasks { font-size:11px; color:var(--text-muted); }
+  .eng-row .eng-bar-wrap { flex:2; }
+  .eng-row .eng-bar {
+    height:8px; background:#f0f2f5; border-radius:4px; overflow:hidden;
+  }
+  .eng-row .eng-bar-fill { height:100%; border-radius:4px; transition:width 0.4s ease; }
+  .eng-row .eng-count { font-size:12px; color:var(--text-secondary); width:40px; text-align:right; font-weight:600; }
+
+  /* ========== 弹窗 ========== */
+  .overlay {
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:200;
+    align-items:center; justify-content:center;
+  }
+  .overlay.show { display:flex; }
+  .dialog {
+    background:#fff; border-radius:12px; width:420px; max-width:90vw;
+    box-shadow:0 8px 40px rgba(0,0,0,.15); overflow:hidden;
+  }
+  .dialog .d-header {
+    padding:18px 20px; border-bottom:1px solid #ebeef5;
+    font-size:16px; font-weight:600; display:flex; align-items:center; justify-content:space-between;
+  }
+  .dialog .d-header .close-btn { width:28px; height:28px; border-radius:6px; border:none; background:transparent; cursor:pointer; font-size:18px; color:var(--text-muted); }
+  .dialog .d-body { padding:20px; }
+  .dialog .d-body .form-group { margin-bottom:14px; }
+  .dialog .d-body label { display:block; font-size:13px; font-weight:500; margin-bottom:6px; color:var(--text-secondary); }
+  .dialog .d-body select, .dialog .d-body input {
+    width:100%; height:38px; border:1px solid #dcdfe6; border-radius:6px; padding:0 12px;
+    font-size:14px; color:var(--text); outline:none; transition:border-color 0.2s;
+  }
+  .dialog .d-body select:focus, .dialog .d-body input:focus { border-color:var(--primary); }
+  .dialog .d-footer { padding:14px 20px; border-top:1px solid #ebeef5; display:flex; justify-content:flex-end; gap:10px; }
+  .btn { height:36px; padding:0 20px; border-radius:8px; border:none; cursor:pointer; font-size:14px; font-weight:500; transition:all 0.15s; display:inline-flex; align-items:center; gap:6px; }
+  .btn--primary { background:var(--primary); color:#fff; } .btn--primary:hover { background:#66b1ff; }
+  .btn--default { background:#f5f7fa; color:var(--text-secondary); } .btn--default:hover { background:#e8edf2; }
+  .btn--danger { background:#f56c6c; color:#fff; } .btn--danger:hover { background:#f78989; }
+
+  /* ========== Toast ========== */
+  .toast {
+    position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:300;
+    background:#67c23a; color:#fff; padding:10px 24px; border-radius:8px;
+    font-size:14px; font-weight:500; display:none; box-shadow:0 4px 16px rgba(0,0,0,.15);
+  }
+  .toast.show { display:block; animation: toastIn 0.3s ease; }
+  .toast.error { background:#f56c6c; }
+  @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(-10px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+  /* ========== 响应式 ========== */
+  @media (max-width: 1400px) {
+    .bottom-dual { grid-template-columns: 1fr; }
+    .stats-row { flex-wrap:wrap; }
+    .stats-item { flex: 1 1 150px; }
+  }
+  @media (max-width: 900px) {
+    .sidebar { display:none; }
+    .main-content { padding:12px; }
+    .todo-grid { grid-template-columns:1fr; }
+    .quick-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="header-left">
+    <span class="sys-name">售后管理系统</span>
+    <span class="sys-divider"></span>
+    <span class="sys-sub">课长工作台</span>
+  </div>
+  <div class="header-right">
+    <button class="notify-btn" id="notifyBtn" title="通知中心">
+      🔔 <span class="badge">5</span>
+    </button>
+    <div class="user-chip">
+      <div class="avatar">张</div>
+      <div>
+        <div class="user-name">张工程课课长</div>
+        <div class="user-role">课长</div>
+      </div>
+      <span class="arrow-down">▾</span>
+    </div>
+  </div>
+</div>
+
+<div class="app-layout">
+  <!-- 侧边栏 -->
+  <div class="sidebar">
+    <div class="menu-item active"><span class="mi-icon">🏠</span> 工作台</div>
+    <div class="menu-group">业务管理</div>
+    <div class="menu-item"><span class="mi-icon">📋</span> 工单管理</div>
+    <div class="menu-item"><span class="mi-icon">👥</span> 客户管理</div>
+    <div class="menu-item"><span class="mi-icon">💰</span> 报价管理<span class="mi-badge"><span class="tag tag--primary" style="font-size:10px">3</span></span></div>
+    <div class="menu-item"><span class="mi-icon">📍</span> 外勤管理<span class="mi-badge"><span class="tag tag--danger" style="font-size:10px">7</span></span></div>
+    <div class="menu-group">工具</div>
+    <div class="menu-item"><span class="mi-icon">📦</span> 配件管理</div>
+    <div class="menu-item"><span class="mi-icon">📞</span> 联系人</div>
+    <div class="menu-item"><span class="mi-icon">📊</span> 数据看板</div>
+    <div class="menu-item"><span class="mi-icon">⚙️</span> 系统管理</div>
+  </div>
+
+  <!-- 主内容 -->
+  <div class="main-content">
+
+    <!-- 标题区 -->
+    <div class="ws-header">
+      <h1><span class="dot"></span>工作台</h1>
+      <div class="greeting">
+        2026年6月11日 星期四 &nbsp;·&nbsp; 下午好，张工程课课长
+        <span class="weather">☀️ 28°C 上海</span>
+      </div>
+    </div>
+
+    <!-- ===== 一、统计概览条 ===== -->
+    <div class="stats-row">
+      <div class="stats-item">
+        <div class="si-icon-wrap" style="background:#f0f2f5;"><span style="font-size:24px">📋</span></div>
+        <div><div class="si-num" style="color:var(--text)">892</div><div class="si-label">团队工单总数</div></div>
+      </div>
+      <div class="stats-item">
+        <div class="si-icon-wrap" style="background:#fff3e0;"><span style="font-size:24px">⏳</span></div>
+        <div><div class="si-num" style="color:#ff9800">12</div><div class="si-label">待分配工单</div></div>
+      </div>
+      <div class="stats-item">
+        <div class="si-icon-wrap" style="background:#e8f5e9;"><span style="font-size:24px">✅</span></div>
+        <div><div class="si-num" style="color:#4caf50">5</div><div class="si-label">待课长确认</div></div>
+      </div>
+      <div class="stats-item">
+        <div class="si-icon-wrap" style="background:#fce4ec;"><span style="font-size:24px">↩️</span></div>
+        <div><div class="si-num" style="color:#e91e63">2</div><div class="si-label">被弃单</div></div>
+      </div>
+      <div class="stats-item">
+        <div class="si-icon-wrap" style="background:#e3f2fd;"><span style="font-size:24px">💰</span></div>
+        <div><div class="si-num" style="color:#1976d2">3</div><div class="si-label">待审报价</div></div>
+      </div>
+    </div>
+
+    <!-- ===== 二、待处理卡片 ===== -->
+    <div class="section-label">待处理事项 <span style="font-weight:400;font-size:12px;color:var(--text-muted);">共 5 项待办</span></div>
+    <div class="todo-grid" id="todoGrid">
+      <div class="todo-card assign" data-dialog="assign" onclick="openAssignDialog()">
+        <div class="tc-icon">📋</div>
+        <div class="tc-body">
+          <div class="tc-label">待分配工单</div>
+          <div class="tc-count">12</div>
+          <div class="tc-action">去分配 →</div>
+        </div>
+        <div class="tc-arrow">›</div>
+      </div>
+
+      <div class="todo-card confirm" onclick="showToast('→ 跳转工单列表 / 筛选 待课长确认')">
+        <div class="tc-icon">✅</div>
+        <div class="tc-body">
+          <div class="tc-label">待课长确认</div>
+          <div class="tc-count">5</div>
+          <div class="tc-action">去确认 →</div>
+        </div>
+        <div class="tc-arrow">›</div>
+      </div>
+
+      <div class="todo-card reject" onclick="showToast('→ 查看被弃单工单 / 重新分配')">
+        <div class="tc-icon">↩️</div>
+        <div class="tc-body">
+          <div class="tc-label">被弃单的工单</div>
+          <div class="tc-count">2</div>
+          <div class="tc-action">重新分配 →</div>
+        </div>
+        <div class="tc-arrow">›</div>
+      </div>
+
+      <div class="todo-card quote" onclick="showToast('→ 跳转报价管理 / 待审核列表')">
+        <div class="tc-icon">💰</div>
+        <div class="tc-body">
+          <div class="tc-label">待审核报价单</div>
+          <div class="tc-count">3</div>
+          <div class="tc-action">去审核 →</div>
+        </div>
+        <div class="tc-arrow">›</div>
+      </div>
+
+      <div class="todo-card checkin" onclick="showToast('→ 跳转外勤管理 / 待审批打卡')">
+        <div class="tc-icon">📍</div>
+        <div class="tc-body">
+          <div class="tc-label">团队待审批打卡</div>
+          <div class="tc-count">7</div>
+          <div class="tc-action">去审批 →</div>
+        </div>
+        <div class="tc-arrow">›</div>
+      </div>
+    </div>
+
+    <!-- ===== 三、快捷操作 ===== -->
+    <div class="section-label">快捷操作</div>
+    <div class="quick-grid">
+      <div class="quick-card" onclick="showToast('→ 打开新建工单表单')">
+        <div class="qc-icon">➕</div>
+        <div class="qc-label">新建工单</div>
+        <div class="qc-desc">为客户创建设备工单</div>
+      </div>
+      <div class="quick-card" onclick="openBatchAssign()">
+        <div class="qc-icon">📤</div>
+        <div class="qc-label">批量分配</div>
+        <div class="qc-desc">一键分配多个待分配工单</div>
+      </div>
+      <div class="quick-card" onclick="showToast('→ 打开新建报价单表单')">
+        <div class="qc-icon">📝</div>
+        <div class="qc-label">新建报价单</div>
+        <div class="qc-desc">配件销售 / 工单报价</div>
+      </div>
+      <div class="quick-card" onclick="showToast('→ 跳转团队管理页面')">
+        <div class="qc-icon">👥</div>
+        <div class="qc-label">团队管理</div>
+        <div class="qc-desc">查看团队工作量分配</div>
+      </div>
+      <div class="quick-card" onclick="showToast('→ 打开扫码窗口')">
+        <div class="qc-icon">📱</div>
+        <div class="qc-label">扫码查询</div>
+        <div class="qc-desc">扫描设备二维码</div>
+      </div>
+      <div class="quick-card" onclick="showToast('→ 打开今日团队日报')">
+        <div class="qc-icon">📊</div>
+        <div class="qc-label">日报汇总</div>
+        <div class="qc-desc">今日团队外勤日报</div>
+      </div>
+    </div>
+
+    <!-- ===== 四、底部双栏 ===== -->
+    <div class="bottom-dual">
+      <!-- 近期待处理工单 -->
+      <div class="panel">
+        <div class="panel-title">📋 近期待处理工单 <span class="num">最近5条</span></div>
+        <div class="order-row" onclick="showToast('→ 打开 WO20260611001 详情')">
+          <span class="or-id">WO20260611001</span>
+          <span class="or-cust">上海某机械有限公司</span>
+          <span class="tag tag--warn">待分配</span>
+          <span class="or-time">10分钟前</span>
+        </div>
+        <div class="order-row" onclick="showToast('→ 打开 WO20260610005 详情')">
+          <span class="or-id">WO20260610005</span>
+          <span class="or-cust">北京某设备制造有限公司</span>
+          <span class="tag tag--success">待确认</span>
+          <span class="or-time">1小时前</span>
+        </div>
+        <div class="order-row" onclick="showToast('→ 打开 WO20260610003 详情')">
+          <span class="or-id">WO20260610003</span>
+          <span class="or-cust">深圳某科技有限公司</span>
+          <span class="tag tag--danger">待接单</span>
+          <span class="or-time">2小时前</span>
+        </div>
+        <div class="order-row" onclick="showToast('→ 打开 WO20260609012 详情')">
+          <span class="or-id">WO20260609012</span>
+          <span class="or-cust">广州某机电有限公司</span>
+          <span class="tag tag--success">待确认</span>
+          <span class="or-time">昨天</span>
+        </div>
+        <div class="order-row" onclick="showToast('→ 打开 WO20260609008 详情')">
+          <span class="or-id">WO20260609008</span>
+          <span class="or-cust">杭州某精密机械厂</span>
+          <span class="tag tag--warn">待分配</span>
+          <span class="or-time">昨天</span>
+        </div>
+      </div>
+
+      <!-- 团队工程师负载 -->
+      <div class="panel">
+        <div class="panel-title">👥 团队工程师今日负载</div>
+        <div class="eng-row">
+          <div class="eng-avatar" style="background:#ff9800;">王</div>
+          <div class="eng-info">
+            <div class="eng-name">王工程师</div>
+            <div class="eng-tasks">进行中 5 · 待接单 3</div>
+          </div>
+          <div class="eng-bar-wrap"><div class="eng-bar"><div class="eng-bar-fill" style="width:80%;background:#ff9800;"></div></div></div>
+          <div class="eng-count">8 单</div>
+        </div>
+        <div class="eng-row">
+          <div class="eng-avatar" style="background:#4caf50;">李</div>
+          <div class="eng-info">
+            <div class="eng-name">李工程师</div>
+            <div class="eng-tasks">进行中 4 · 待接单 2</div>
+          </div>
+          <div class="eng-bar-wrap"><div class="eng-bar"><div class="eng-bar-fill" style="width:60%;background:#4caf50;"></div></div></div>
+          <div class="eng-count">6 单</div>
+        </div>
+        <div class="eng-row">
+          <div class="eng-avatar" style="background:#1976d2;">赵</div>
+          <div class="eng-info">
+            <div class="eng-name">赵工程师</div>
+            <div class="eng-tasks">进行中 2 · 待接单 1</div>
+          </div>
+          <div class="eng-bar-wrap"><div class="eng-bar"><div class="eng-bar-fill" style="width:30%;background:#1976d2;"></div></div></div>
+          <div class="eng-count">3 单</div>
+        </div>
+        <div class="eng-row">
+          <div class="eng-avatar" style="background:var(--primary);">刘</div>
+          <div class="eng-info">
+            <div class="eng-name">刘工程师</div>
+            <div class="eng-tasks">进行中 3 · 待接单 2</div>
+          </div>
+          <div class="eng-bar-wrap"><div class="eng-bar"><div class="eng-bar-fill" style="width:50%;background:var(--primary);"></div></div></div>
+          <div class="eng-count">5 单</div>
+        </div>
+        <div class="eng-row">
+          <div class="eng-avatar" style="background:#9c27b0;">陈</div>
+          <div class="eng-info">
+            <div class="eng-name">陈工程师</div>
+            <div class="eng-tasks">进行中 1 · 待接单 0</div>
+          </div>
+          <div class="eng-bar-wrap"><div class="eng-bar"><div class="eng-bar-fill" style="width:10%;background:#9c27b0;"></div></div></div>
+          <div class="eng-count">1 单</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== 分配弹窗（演示交互） ===== -->
+<div class="overlay" id="assignOverlay">
+  <div class="dialog">
+    <div class="d-header">
+      📋 分配工单 — WO20260611001
+      <button class="close-btn" onclick="closeDialog('assignOverlay')">✕</button>
+    </div>
+    <div class="d-body">
+      <div style="background:#fafafa;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:var(--text-secondary);">
+        <strong>上海某机械有限公司</strong> · 维修 · 主轴异响故障
+      </div>
+      <div class="form-group">
+        <label>选择工程师</label>
+        <select id="engineerSelect">
+          <option value="">-- 请选择 --</option>
+          <option value="wang">王工程师（当前 8 单 · 负载 80%）</option>
+          <option value="li">李工程师（当前 6 单 · 负载 60%）</option>
+          <option value="zhao">赵工程师（当前 3 单 · 负载 30%）</option>
+          <option value="liu">刘工程师（当前 5 单 · 负载 50%）</option>
+          <option value="chen">陈工程师（当前 1 单 · 负载 10%） ⭐ 推荐</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>备注（可选）</label>
+        <input type="text" placeholder="输入备注信息...">
+      </div>
+    </div>
+    <div class="d-footer">
+      <button class="btn btn--default" onclick="closeDialog('assignOverlay')">取消</button>
+      <button class="btn btn--primary" onclick="doAssign()">确认分配</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 批量分配弹窗 ===== -->
+<div class="overlay" id="batchOverlay">
+  <div class="dialog">
+    <div class="d-header">
+      📤 批量分配工单
+      <button class="close-btn" onclick="closeDialog('batchOverlay')">✕</button>
+    </div>
+    <div class="d-body">
+      <div style="background:#fff3e0;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#ff9800;">
+        ⚡ 当前有 <strong>12</strong> 个待分配工单，可一次性分配给多位工程师
+      </div>
+      <div class="form-group">
+        <label>选择工程师</label>
+        <select id="batchEngineerSelect">
+          <option value="">-- 按负载均衡自动分配 --</option>
+          <option value="wang">王工程师</option>
+          <option value="li">李工程师</option>
+          <option value="zhao">赵工程师</option>
+          <option value="liu">刘工程师</option>
+          <option value="chen">陈工程师</option>
+        </select>
+      </div>
+    </div>
+    <div class="d-footer">
+      <button class="btn btn--default" onclick="closeDialog('batchOverlay')">取消</button>
+      <button class="btn btn--primary" onclick="doBatchAssign()">自动分配</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  function showToast(msg, isError) {
+    const t = document.getElementById('toast')
+    t.textContent = msg
+    t.className = 'toast show' + (isError ? ' error' : '')
+    clearTimeout(t._timer)
+    t._timer = setTimeout(() => t.classList.remove('show'), 2200)
+  }
+  function openDialog(id) { document.getElementById(id).classList.add('show') }
+  function closeDialog(id) { document.getElementById(id).classList.remove('show') }
+
+  function openAssignDialog() { openDialog('assignOverlay') }
+  function openBatchAssign() { openDialog('batchOverlay') }
+
+  function doAssign() {
+    const sel = document.getElementById('engineerSelect').value
+    if (!sel) return showToast('请先选择工程师', true)
+    closeDialog('assignOverlay')
+    showToast('✅ 工单 WO20260611001 已分配给 ' + document.getElementById('engineerSelect').selectedOptions[0].text.split('（')[0])
+  }
+
+  function doBatchAssign() {
+    closeDialog('batchOverlay')
+    showToast('✅ 已按负载均衡自动分配 12 个工单给 5 位工程师')
+  }
+
+  document.getElementById('notifyBtn').onclick = () => showToast('📬 通知中心（功能开发中）')
+</script>
+
+</body>
+</html>

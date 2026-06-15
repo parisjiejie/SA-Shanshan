@@ -321,44 +321,137 @@
     <!-- 报修对话框 -->
     <el-dialog
       v-model="repairDialog.visible"
-      title="提交报修申请"
+      title="报修服务"
       width="95%"
       :show-close="false"
-      class="mobile-dialog"
+      class="mobile-dialog repair-dialog"
+      :fullscreen="true"
     >
-      <el-form :model="repairDialog.form" label-position="top">
-        <el-form-item label="设备信息">
-          <el-input v-model="repairDialog.form.deviceInfo" placeholder="设备型号/序列号（选填）" />
-        </el-form-item>
-        <el-form-item label="故障描述" required>
-          <el-input 
-            v-model="repairDialog.form.faultDescription" 
-            type="textarea" 
-            :rows="4"
-            placeholder="请详细描述设备故障现象..."
-          />
-        </el-form-item>
-        <el-form-item label="联系人">
-          <el-input v-model="repairDialog.form.contactName" placeholder="联系人姓名" />
-        </el-form-item>
-        <el-form-item label="联系电话" required>
-          <el-input v-model="repairDialog.form.contactPhone" placeholder="联系电话" />
-        </el-form-item>
-        <el-form-item label="服务地址" required>
-          <el-input v-model="repairDialog.form.address" placeholder="详细服务地址" />
-        </el-form-item>
-        <el-form-item label="预约时间">
-          <el-date-picker
-            v-model="repairDialog.form.appointmentTime"
-            type="datetime"
-            placeholder="选择预约时间"
-            style="width: 100%"
-          />
-        </el-form-item>
-      </el-form>
+      <template #header>
+        <div class="repair-dialog-header">
+          <span class="repair-title">报修服务</span>
+          <el-button link @click="repairDialog.visible = false">
+            <el-icon><Close /></el-icon>
+          </el-button>
+        </div>
+      </template>
+      <div class="repair-form-container">
+        <!-- 客户信息 -->
+        <div class="repair-section">
+          <div class="repair-section-title">客户信息</div>
+          <el-form :model="repairDialog.form" label-position="top" class="repair-form">
+            <el-form-item label="客户公司">
+              <el-input :model-value="repairDialog.form.customerName" readonly />
+            </el-form-item>
+            <el-form-item label="联系人">
+              <el-input v-model="repairDialog.form.customerContact" placeholder="联系人姓名" />
+            </el-form-item>
+            <el-form-item label="联系电话">
+              <el-input v-model="repairDialog.form.customerPhone" placeholder="联系电话" />
+            </el-form-item>
+            <el-form-item label="地址">
+              <el-input v-model="repairDialog.form.customerAddress" type="textarea" :rows="2" placeholder="详细服务地址" />
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <!-- 工单信息 -->
+        <div class="repair-section">
+          <div class="repair-section-title">工单信息</div>
+          <el-form :model="repairDialog.form" label-position="top" class="repair-form">
+            <el-form-item label="服务类型">
+              <el-radio-group v-model="repairDialog.form.subType" class="type-radio-group">
+                <el-radio-button label="repair">维修</el-radio-button>
+                <el-radio-button label="trial_processing">试加工</el-radio-button>
+                <el-radio-button label="refitting">改造</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="紧急程度">
+              <el-radio-group v-model="repairDialog.form.urgency">
+                <el-radio-button label="low">低</el-radio-button>
+                <el-radio-button label="medium">中</el-radio-button>
+                <el-radio-button label="high">高</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <!-- 设备信息 -->
+        <div class="repair-section">
+          <div class="repair-section-title">设备信息</div>
+          <el-form :model="repairDialog.form" label-position="top" class="repair-form">
+            <el-form-item label="设备型号">
+              <el-select
+                v-model="repairDialog.form.assetModel"
+                placeholder="选择设备型号"
+                clearable
+                style="width: 100%"
+                @change="onRepairModelChange"
+              >
+                <el-option
+                  v-for="m in repairCustomerModels"
+                  :key="m"
+                  :label="m"
+                  :value="m"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="序列号">
+              <el-select
+                v-model="repairDialog.form.assetSerialNumber"
+                placeholder="选择序列号"
+                clearable
+                style="width: 100%"
+                @change="onRepairSNChange"
+              >
+                <el-option
+                  v-for="sn in repairCustomerSNs"
+                  :key="sn.serialNumber"
+                  :label="sn.serialNumber"
+                  :value="sn.serialNumber"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item v-if="repairDialog.form.warrantyStatus" label="保修状态">
+              <el-tag :type="WarrantyStatusType[repairDialog.form.warrantyStatus] || 'info'" size="large">
+                {{ WarrantyStatusText[repairDialog.form.warrantyStatus] || repairDialog.form.warrantyStatus }}
+              </el-tag>
+            </el-form-item>
+          </el-form>
+        </div>
+
+        <!-- 故障描述 -->
+        <div class="repair-section">
+          <div class="repair-section-title">故障描述</div>
+          <el-form :model="repairDialog.form" label-position="top" class="repair-form">
+            <el-form-item required>
+              <el-input
+                v-model="repairDialog.form.faultDescription"
+                type="textarea"
+                :rows="4"
+                placeholder="请详细描述设备故障现象"
+              />
+            </el-form-item>
+            <div class="fault-tags">
+              <span class="tag-label">常见故障：</span>
+              <el-tag
+                v-for="tag in commonFaultTags"
+                :key="tag.label"
+                class="fault-tag"
+                effect="plain"
+                @click="applyRepairFaultTag(tag)"
+              >
+                {{ tag.label }}
+              </el-tag>
+            </div>
+          </el-form>
+        </div>
+      </div>
       <template #footer>
-        <el-button @click="repairDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="submitRepairOrder">提交申请</el-button>
+        <div class="repair-footer">
+          <el-button size="large" @click="repairDialog.visible = false">取消</el-button>
+          <el-button type="primary" size="large" @click="submitRepairOrder">提交报修</el-button>
+        </div>
       </template>
     </el-dialog>
 
@@ -509,7 +602,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { signWorkorder, getPendingSignWorkorders, getWorkorderById, saveReportPdf } from '../stores/workorderFlowStore.js'
+import { signWorkorder, getPendingSignWorkorders, getWorkorderById, saveReportPdf, createWorkorder } from '../stores/workorderFlowStore.js'
 import { generateReportPdf } from '../utils/reportPdf.js'
 import {
   UserFilled,
@@ -774,14 +867,79 @@ const videoInputRef = ref(null)
 const repairDialog = reactive({
   visible: false,
   form: {
-    deviceInfo: '',
-    faultDescription: '',
-    contactName: '',
-    contactPhone: '',
-    address: '',
-    appointmentTime: null
+    customerId: '',
+    customerName: '',
+    customerPhone: '',
+    customerContact: '',
+    customerAddress: '',
+    category: 'service',
+    subType: 'repair',
+    urgency: 'medium',
+    assetModel: '',
+    assetSerialNumber: '',
+    warrantyStatus: '',
+    faultDescription: ''
   }
 })
+
+// 设备数据（与 StaffWorkorderCreate 一致）
+const repairAssets = ref([
+  { id: 'asset_001', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN001', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-03-15' },
+  { id: 'asset_002', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN002', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-01-10' },
+  { id: 'asset_003', customerId: 'cust_001', model: 'LASER-B200', serialNumber: 'SN003', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-06-20' },
+  { id: 'asset_004', customerId: 'cust_002', model: 'PRESS-C300', serialNumber: 'SN004', warrantyStatus: 'expired', warrantyExpiry: '2025-02-01' },
+  { id: 'asset_005', customerId: 'cust_002', model: 'CNC-A100', serialNumber: 'SN005', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-09-01' },
+  { id: 'asset_006', customerId: 'cust_003', model: 'LASER-B200', serialNumber: 'SN006', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-12-01' },
+  { id: 'asset_007', customerId: 'cust_003', model: 'PRESS-C300', serialNumber: 'SN007', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-04-15' }
+])
+
+const WarrantyStatusText = { in_warranty: '保内', out_of_warranty: '保外', expired: '过保' }
+const WarrantyStatusType = { in_warranty: 'success', out_of_warranty: 'warning', expired: 'danger' }
+
+const commonFaultTags = [
+  { label: '无法启动', description: '设备无法正常启动，通电后无响应' },
+  { label: '异响', description: '设备运行过程中出现异常响声' },
+  { label: '漏油', description: '设备存在漏油现象，需检查密封件' },
+  { label: '精度异常', description: '设备加工精度超出允许偏差范围' },
+  { label: '过热报警', description: '设备运行中触发过热报警保护' }
+]
+
+// 级联：客户 → 设备型号列表
+const repairCustomerModels = computed(() => {
+  if (!repairDialog.form.customerId) return []
+  return [...new Set(repairAssets.value.filter(a => a.customerId === repairDialog.form.customerId).map(a => a.model))]
+})
+
+// 级联：客户+型号 → SN列表
+const repairCustomerSNs = computed(() => {
+  if (!repairDialog.form.customerId) return []
+  let filtered = repairAssets.value.filter(a => a.customerId === repairDialog.form.customerId)
+  if (repairDialog.form.assetModel) {
+    filtered = filtered.filter(a => a.model === repairDialog.form.assetModel)
+  }
+  return filtered
+})
+
+const onRepairModelChange = () => {
+  repairDialog.form.assetSerialNumber = ''
+  repairDialog.form.warrantyStatus = ''
+}
+
+const onRepairSNChange = (sn) => {
+  const asset = repairAssets.value.find(a => a.serialNumber === sn && a.customerId === repairDialog.form.customerId)
+  if (asset) {
+    repairDialog.form.warrantyStatus = asset.warrantyStatus || ''
+    if (!repairDialog.form.assetModel && asset.model) {
+      repairDialog.form.assetModel = asset.model
+    }
+  } else {
+    repairDialog.form.warrantyStatus = ''
+  }
+}
+
+const applyRepairFaultTag = (tag) => {
+  repairDialog.form.faultDescription = tag.description
+}
 
 // 配件购买对话框
 const partsDialog = reactive({
@@ -1104,15 +1262,35 @@ const scrollToBottom = () => {
 }
 
 const createRepairOrder = () => {
-  repairDialog.visible = true
-  repairDialog.form = {
-    deviceInfo: '',
-    faultDescription: '',
-    contactName: customerInfo.name,
-    contactPhone: '',
-    address: '',
-    appointmentTime: null
+  // 从 staffAuth 读取客户信息（统一登录存的是 staffAuth）
+  let customerId = ''
+  let customerName = ''
+  let customerPhone = ''
+  let customerAddress = ''
+  try {
+    const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+    customerId = auth.id || auth.userId || ''
+    customerName = auth.name || ''
+    customerPhone = auth.phone || ''
+  } catch (e) {
+    console.error('读取客户信息失败:', e)
   }
+
+  repairDialog.form = {
+    customerId,
+    customerName,
+    customerPhone,
+    customerContact: '',
+    customerAddress,
+    category: 'service',
+    subType: 'repair',
+    urgency: 'medium',
+    assetModel: '',
+    assetSerialNumber: '',
+    warrantyStatus: '',
+    faultDescription: ''
+  }
+  repairDialog.visible = true
 }
 
 const submitRepairOrder = () => {
@@ -1120,17 +1298,26 @@ const submitRepairOrder = () => {
     ElMessage.warning('请填写故障描述')
     return
   }
-  if (!repairDialog.form.contactPhone) {
-    ElMessage.warning('请填写联系电话')
-    return
-  }
-  if (!repairDialog.form.address) {
-    ElMessage.warning('请填写服务地址')
-    return
-  }
-  
-  ElMessage.success('报修申请已提交，我们会尽快与您联系')
+
+  const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+  const wo = createWorkorder({
+    customerId: repairDialog.form.customerId,
+    customerName: repairDialog.form.customerName,
+    customerPhone: repairDialog.form.customerPhone,
+    customerContact: repairDialog.form.customerContact,
+    address: repairDialog.form.customerAddress,
+    deviceModel: repairDialog.form.assetModel,
+    serialNumber: repairDialog.form.assetSerialNumber,
+    faultDescription: repairDialog.form.faultDescription,
+    category: repairDialog.form.category,
+    subType: repairDialog.form.subType,
+    urgency: repairDialog.form.urgency,
+    warrantyStatus: repairDialog.form.warrantyStatus || 'unknown'
+  }, 'customer', auth.name || repairDialog.form.customerName)
+
+  ElMessage.success(`报修申请已提交，工单号 ${wo.workorderId}`)
   repairDialog.visible = false
+  loadWorkorders()
 }
 
 const createPartsOrder = () => {
@@ -1667,6 +1854,7 @@ onUnmounted(() => {
   padding-bottom: 5px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .workorder-tabs::-webkit-scrollbar {
@@ -2521,11 +2709,78 @@ onUnmounted(() => {
     border-left: 1px solid #e8e8e8;
     border-right: 1px solid #e8e8e8;
   }
-  
+
   .bottom-nav {
     max-width: 414px;
     left: 50%;
     transform: translateX(-50%);
   }
+}
+
+/* 报修对话框 */
+.repair-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.repair-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: #262626;
+}
+
+.repair-form-container {
+  padding: 0;
+}
+
+.repair-section {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.repair-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 12px;
+  padding-left: 8px;
+  border-left: 3px solid #fa8c16;
+}
+
+.fault-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tag-label {
+  font-size: 13px;
+  color: #909399;
+}
+
+.fault-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fault-tag:hover {
+  color: #fa8c16;
+  border-color: #fa8c16;
+}
+
+.repair-footer {
+  display: flex;
+  gap: 15px;
+  width: 100%;
+}
+
+.repair-footer .el-button {
+  flex: 1;
 }
 </style>

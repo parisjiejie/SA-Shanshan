@@ -10,8 +10,8 @@
     </div>
 
     <div class="checkin-form">
-      <!-- 打卡类型 -->
-      <div class="form-section">
+      <!-- 打卡类型（从工单进入时锁定为工单打卡，不显示切换） -->
+      <div class="form-section" v-if="!fromWorkorder">
         <label class="section-label">打卡类型</label>
         <div class="type-selector">
           <div class="type-card" :class="{ active: form.checkinType === 'workorder' }" @click="switchType('workorder')">
@@ -24,6 +24,13 @@
             <span class="type-name">日常打卡</span>
             <span class="type-desc">拜访、洽谈、活动</span>
           </div>
+        </div>
+      </div>
+      <!-- 从工单进入时显示已锁定类型 -->
+      <div class="form-section" v-if="fromWorkorder">
+        <div class="section-header">
+          <label class="section-label">打卡类型</label>
+          <el-tag size="small" type="primary">工单打卡</el-tag>
         </div>
       </div>
 
@@ -47,8 +54,16 @@
       <!-- 工单打卡：选工单（可选） -->
       <template v-if="form.checkinType === 'workorder'">
         <div class="form-section">
-          <label class="section-label">关联工单 <span class="optional">（可选）</span></label>
-          <div class="select-box" @click="showWorkorderPicker = true">
+          <label class="section-label">关联工单 <span v-if="!fromWorkorder" class="optional">（可选）</span></label>
+          <!-- 从工单进入：只读显示 -->
+          <div v-if="fromWorkorder" class="select-box locked">
+            <div class="selected-value">
+              <div class="workorder-title">{{ form.workorderId }}</div>
+              <div class="workorder-subtitle">{{ form.customerName }}</div>
+            </div>
+          </div>
+          <!-- 外勤入口：可选择 -->
+          <div v-else class="select-box" @click="showWorkorderPicker = true">
             <div v-if="form.workorderId" class="selected-value">
               <div class="workorder-title">{{ form.workorderId }}</div>
               <div class="workorder-subtitle">{{ form.customerName }} | {{ selectedWorkorder?.deviceModel }}</div>
@@ -59,7 +74,7 @@
         </div>
         <div class="form-section">
           <label class="section-label">客户名称 <span class="required">*</span></label>
-          <el-input v-model="form.customerName" placeholder="选工单自动带入，也可手动输入" clearable />
+          <el-input v-model="form.customerName" :disabled="fromWorkorder" :placeholder="fromWorkorder ? '已自动带入' : '选工单自动带入，也可手动输入'" clearable />
         </div>
       </template>
 
@@ -140,10 +155,15 @@ const currentTime = ref(''); const timeInterval = ref(null)
 const staffAuth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
 const engineerName = staffAuth.name || staffAuth.username || ''
 
+// 是否从工单卡片进入（锁定工单打卡，不可切换日常打卡）
+const fromWorkorder = route.query.from === 'workorder'
+
 const form = ref({
   checkinType: 'workorder',
   location: '', address: '', latitude: null, longitude: null,
-  workorderId: '', customerName: '', workContent: '', photos: []
+  workorderId: route.query.workorderId || '',
+  customerName: route.query.customerName || '',
+  workContent: '', photos: []
 })
 
 const locationLoading = ref(false); const submitting = ref(false)
@@ -172,8 +192,8 @@ const canSubmit = computed(() => {
   return !!f.customerName && !!f.workContent
 })
 
-const switchType = (t) => { form.value.checkinType = t }
-const goBack = () => router.push('/staff-mobile-workspace')
+const switchType = (t) => { if (fromWorkorder) return; form.value.checkinType = t }
+const goBack = () => router.back()
 const updateTime = () => {
   const now = new Date()
   currentTime.value = now.toISOString().slice(0, 19).replace('T', ' ')
@@ -273,6 +293,8 @@ onUnmounted(() => { clearInterval(timeInterval.value) })
 
 .select-box { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid #dcdfe6; border-radius: 8px; cursor: pointer; background: #fafafa; }
 .select-box:hover { border-color: #409EFF; }
+.select-box.locked { cursor: default; background: #f5f7fa; }
+.select-box.locked:hover { border-color: #dcdfe6; }
 .selected-value { flex: 1; }
 .workorder-title { font-size: 15px; font-weight: 500; color: #303133; }
 .workorder-subtitle { font-size: 12px; color: #909399; margin-top: 2px; }

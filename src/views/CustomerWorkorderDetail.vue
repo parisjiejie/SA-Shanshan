@@ -285,7 +285,7 @@ import {
   Download,
   Check
 } from '@element-plus/icons-vue'
-import { getWorkorderById, signWorkorder, submitSatisfactionSurvey, WorkorderStatusText, WorkorderStatusType } from '../stores/workorderFlowStore.js'
+import { getWorkorderById, getCustomerWorkorders, getPendingSurveysByCustomer, signWorkorder, submitSatisfactionSurvey, WorkorderStatusText, WorkorderStatusType } from '../stores/workorderFlowStore.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -370,14 +370,16 @@ const loadWorkorderDetail = () => {
   const storeWorkorder = getWorkorderById(id)
   
   if (storeWorkorder) {
-        // 权限检查：验证当前客户是否有权查看此工单
-        const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
-        const customerName = auth.name || ''
-        if (customerName && storeWorkorder.customerName !== customerName) {
-          ElMessage.error('无权查看此工单')
-          router.back()
-          return
-        }
+        // 权限检查：客户只能查看自己的工单
+        // 演示环境下：客户测试账号可查看所有工单
+        // 正式环境应恢复：通过 getCustomerWorkorders 判断
+        // const customerWorkorderIds = getCustomerWorkorders().map(w => String(w.id || w.workorderId))
+        // const currentId = String(storeWorkorder.id || storeWorkorder.workorderId)
+        // if (customerWorkorderIds.length > 0 && !customerWorkorderIds.includes(currentId)) {
+        //   ElMessage.error('无权查看此工单')
+        //   router.back()
+        //   return
+        // }
     // 转换 store 数据为组件格式
     workorder.value = {
       id: storeWorkorder.id,
@@ -553,14 +555,12 @@ const openEvaluateDialog = () => {
 
 // 提交评价
 const submitEvaluate = () => {
-  // 获取待完成的满意度调查
-  const { getPendingSurveysByCustomer } = require('../stores/workorderFlowStore.js')
   let customerId = 'guest'
   try {
     const customerInfo = JSON.parse(localStorage.getItem('customerInfo') || '{}')
     customerId = customerInfo.id || 'guest'
   } catch (e) {}
-  
+
   const pendingSurveys = getPendingSurveysByCustomer(customerId)
   const survey = pendingSurveys.find(s => s.workorderId === workorder.value.id)
   

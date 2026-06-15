@@ -73,14 +73,22 @@ export const WorkorderFlowSteps = [
 // ==================== 状态管理 ====================
 const state = reactive({ workorders: [], notifications: [] })
 
+const MOCK_DATA_VERSION = 3 // 修改 mock 数据后递增此版本号
+
 const loadFromStorage = () => {
   try {
     const saved = localStorage.getItem('workorderFlowData')
     if (saved) {
       const d = JSON.parse(saved)
-      state.workorders = d.workorders || []
-      state.notifications = d.notifications || []
-      console.log('[store] loadFromStorage: 从 localStorage 加载', d.workorders?.length || 0, '条工单')
+      // 版本检查：mock 数据版本不匹配时清除旧数据
+      if (d.mockVersion !== MOCK_DATA_VERSION) {
+        console.log('[store] mock 数据版本不匹配，清除旧数据重新初始化')
+        localStorage.removeItem('workorderFlowData')
+      } else {
+        state.workorders = d.workorders || []
+        state.notifications = d.notifications || []
+        console.log('[store] loadFromStorage: 从 localStorage 加载', d.workorders?.length || 0, '条工单')
+      }
     } else {
       console.log('[store] loadFromStorage: localStorage 中无数据，将初始化 mock 数据')
     }
@@ -94,14 +102,15 @@ const saveToStorage = () => {
   try {
     const rawWorkorders = toRaw(state.workorders).map(w => toRaw(w))
     const rawNotifications = toRaw(state.notifications).map(n => toRaw(n))
-    const data = { workorders: rawWorkorders, notifications: rawNotifications }
+    const data = { workorders: rawWorkorders, notifications: rawNotifications, mockVersion: MOCK_DATA_VERSION }
     localStorage.setItem('workorderFlowData', JSON.stringify(data))
     console.log('[store] saveToStorage: 已保存', rawWorkorders.length, '条工单,', rawNotifications.length, '条通知')
   } catch (e) { console.error('保存工单流程数据失败:', e) }
 }
 
 const generateWorkorderId = () => {
-  const d = new Date(); const ds = d.toISOString().slice(0,10).replace(/-/g,'')
+  const d = new Date()
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
   // 从已有工单中找出当日最大序号 +1
   const prefix = `WO${ds}`
   let maxSeq = 0
@@ -168,7 +177,7 @@ const createWorkorder = (data, creatorRole, creatorName) => {
 }
 
 /** 课长分配工程师 → 待接单 */
-const assignWorkorder = (workorderId, engineerId, engineerName, engineerPhone) => {
+const assignWorkorder = (workorderId, engineerId, engineerName, engineerPhone, assignData = {}) => {
   const w = state.workorders.find(w => w.id === workorderId); if (!w) return null
   if (w.status !== WorkorderStatus.PENDING_ASSIGN) {
     console.warn('assignWorkorder: 状态不允许分配，当前:', w.status)
@@ -177,6 +186,14 @@ const assignWorkorder = (workorderId, engineerId, engineerName, engineerPhone) =
   w.status = WorkorderStatus.PENDING_ACCEPT; w.engineerId = engineerId
   w.engineerName = engineerName; w.engineerPhone = engineerPhone
   w.assignTime = new Date().toISOString(); w.updateTime = new Date().toISOString()
+  // 分配附加信息
+  if (assignData.engineers && assignData.engineers.length > 0) {
+    w.assignedEngineers = assignData.engineers
+  }
+  if (assignData.workContent) w.workContent = assignData.workContent
+  if (assignData.workStartTime) w.workStartTime = assignData.workStartTime
+  if (assignData.workEndTime) w.workEndTime = assignData.workEndTime
+  if (assignData.vehicle) w.vehicle = assignData.vehicle
   w.processRecords.push({ time: new Date().toISOString(), title: '工单分配',
     content: `课长分配给工程师 ${engineerName}`, operator: '课长', operatorType: 'techLead' })
   saveToStorage()
@@ -244,6 +261,10 @@ const submitForSign = (workorderId, serviceReport) => {
   w.status = WorkorderStatus.PENDING_SIGN; w.completeTime = new Date().toISOString()
   w.updateTime = new Date().toISOString()
   if (serviceReport) { w.serviceReport = { ...w.serviceReport, ...serviceReport } }
+  // 安装工单完成时，自动写入安装日期
+  if (w.category === 'installation' && !w.installDate) {
+    w.installDate = new Date().toISOString().slice(0, 10)
+  }
   w.processRecords.push({ time: new Date().toISOString(), title: '提交签字',
     content: '工程师已提交服务报告，等待签字确认', operator: w.engineerName, operatorType: 'engineer' })
   saveToStorage()
@@ -380,21 +401,12 @@ const markNotificationAsRead = (notificationId) => {
 
 // ==================== 查询 ====================
 const getCustomerWorkorders = (customerId, customerName) => {
-  const byId = state.workorders.filter(w => w.customerId === customerId)
-  if (byId.length > 0) return byId.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  // 退而按客户名称匹配
-  if (customerName) {
-    return state.workorders.filter(w => w.customerName === customerName)
-      .sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  }
-  return []
+  // 演示环境：客户测试账号看全部工单
+  return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 }
 const getEngineerWorkorders = (engineerId, engineerName) => {
-  const byId = state.workorders.filter(w => w.engineerId === engineerId)
-  const byName = state.workorders.filter(w => w.engineerName === engineerName)
-  // 合并去重
-  const merged = [...byId, ...byName.filter(w => !byId.find(x => x.id === w.id))]
-  return merged.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
+  // 演示环境：工程师测试账号看全部工单
+  return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 }
 const getWorkorderById = (id) =>
   state.workorders.find(w => w.id === id || w.workorderId === id)
@@ -402,23 +414,11 @@ const getWorkorderById = (id) =>
 /** 根据用户角色返回可见的工单列表 */
 const getVisibleWorkorders = (user) => {
   const { role, id: userId, name: userName } = user || {}
-  // admin/director 看全部
-  if (role === 'admin' || role === 'director') return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  // techLead 看全部（负责分配和确认所有工单）
-  if (role === 'techLead') return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  // assistant 看全部工单
-  if (role === 'assistant') return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  // engineer 只看分配给自己的
-  if (role === 'engineer') {
-    return state.workorders.filter(w =>
-      w.engineerId === userId || w.engineerName === userName
-    ).sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
-  }
-  // customer 只看跟自己有关的
-  if (role === 'customer') {
-    return getCustomerWorkorders(userId, userName)
-  }
-  return []
+  // 演示环境：所有角色都能看到全部工单
+  // admin/director/techLead/assistant 看全部
+  // engineer 演示环境下看全部（正式环境应只看分配给自己的）
+  // customer 演示环境下看全部（正式环境应只看关联自己的）
+  return [...state.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 }
 const getWorkordersByStatus = (status) =>
   state.workorders.filter(w => w.status === status).sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
@@ -511,56 +511,56 @@ const initMockData = (force = false) => {
     }
 
     pushMock('wo_001','WO20260608001','service','repair',WorkorderStatus.PENDING_ASSIGN,
-      h(1),h(1),{role:'assistant',name:'赵业务助理'},'张经理','13800138000',
+      h(1),h(1),{role:'assistant',name:'赵业务助理'},'上海某机械有限公司','021-55551234',
       '激光切割机 LX-3000','ABC123','设备无法正常启动，显示屏报错E01','high','in','2026-02-19',
-      '广州市天河区科技园路1号',[{time:h(1),title:'工单创建',content:'业务助理提交工单',operator:'赵业务助理',operatorType:'assistant'}],
+      '上海市浦东新区张江高科技园区XX路88号',[{time:h(1),title:'工单创建',content:'业务助理提交工单',operator:'赵业务助理',operatorType:'assistant'}],
       null,null,null,null,null,null,null,null,null,null,null,null,null,null)
 
     pushMock('wo_002','WO20260608002','service','trial_processing',WorkorderStatus.PENDING_ACCEPT,
-      h(24),h(12),{role:'customer',name:'张经理'},'张经理','13800138000',
+      h(24),h(12),{role:'customer',name:'张经理'},'上海某机械有限公司','021-55551234',
       '加工中心 MC-800','DEF456','试加工件轮廓精度不合格','medium','in','2026-06-30',
-      '广州市天河区科技园路1号',[
+      '上海市浦东新区张江高科技园区XX路88号',[
         {time:h(24),title:'工单创建',content:'客户提交工单',operator:'张经理',operatorType:'customer'},
-        {time:h(12),title:'工单分配',content:'课长分配给工程师 李工程师',operator:'课长',operatorType:'techLead'}],
-      'eng_001','李工程师','13900139000',h(12),null,null,null,null,null,null,null,null,null)
+        {time:h(12),title:'工单分配',content:'课长分配给工程师 王工程师',operator:'课长',operatorType:'techLead'}],
+      'eng_001','王工程师','13800000001',h(12),null,null,null,null,null,null,null,null,null)
 
     pushMock('wo_003','WO20260608003','service','refitting',WorkorderStatus.PROCESSING,
-      h(48),h(6),{role:'customer',name:'张经理'},'张经理','13800138000',
+      h(48),h(6),{role:'customer',name:'张经理'},'上海某机械有限公司','021-55551234',
       '数控冲床 CK-2000','GHI789','改造后模具无法复位','medium','out','2024-12-31',
-      '广州市天河区科技园路1号',[
+      '上海市浦东新区张江高科技园区XX路88号',[
         {time:h(48),title:'工单创建',content:'客户提交工单',operator:'张经理',operatorType:'customer'},
         {time:h(36),title:'工单分配',content:'课长分配给工程师 王工程师',operator:'课长',operatorType:'techLead'},
         {time:h(6),title:'工程师接单',content:'工程师 王工程师 已接单',operator:'王工程师',operatorType:'engineer'}],
       'eng_002','王工程师','13900239000',h(36),h(6),null,null,null,null,null,null,null,null)
 
     pushMock('wo_004','WO20260608004','service','repair',WorkorderStatus.PENDING_SIGN,
-      h(72),h(2),{role:'customer',name:'张经理'},'张经理','13800138000',
+      h(72),h(2),{role:'customer',name:'张经理'},'上海某机械有限公司','021-55551234',
       '激光切割机 LX-3000','JKL012','激光器功率衰减','medium','out','2024-12-31',
-      '广州市天河区科技园路1号',[
+      '上海市浦东新区张江高科技园区XX路88号',[
         {time:h(72),title:'工单创建',content:'客户提交工单',operator:'张经理',operatorType:'customer'},
         {time:h(48),title:'工单分配',content:'课长分配给工程师 赵工程师',operator:'课长',operatorType:'techLead'},
         {time:h(24),title:'工程师接单',content:'接单',operator:'赵工程师',operatorType:'engineer'},
         {time:h(2),title:'提交签字',content:'已提交服务报告',operator:'赵工程师',operatorType:'engineer'}],
       'eng_003','赵工程师','13900339000',h(48),h(24),h(2),null,null,null,
-      {repairContent:'更换激光器模块，校准光路',replacedParts:['激光器模块'],testResult:'功率恢复正常'},null,null,null,null)
+      {workContent:'更换激光器模块，校准光路',repairProcess:'现场确认激光器功率衰减，更换激光器模块后校准光路',replacedParts:['激光器模块'],testResult:'功率恢复正常'},null,null,null,null)
 
     pushMock('wo_005','WO20260608005','installation',null,WorkorderStatus.TECHLEAD_CONFIRM,
-      h(96),h(4),{role:'assistant',name:'钱业务助理'},'李总','13911111111',
+      h(96),h(4),{role:'assistant',name:'钱业务助理'},'北京某设备制造有限公司','010-66667890',
       '激光切割机 LX-5000','MNO345','新设备安装调试','low','in','2026-08-15',
-      '广州市番禺区',[
+      '北京市朝阳区望京科技园YY路12号',[
         {time:h(96),title:'工单创建',content:'业务助理提交工单',operator:'钱业务助理',operatorType:'assistant'},
         {time:h(72),title:'工单分配',content:'课长分配给工程师 孙工程师',operator:'课长',operatorType:'techLead'},
         {time:h(48),title:'工程师接单',content:'接单',operator:'孙工程师',operatorType:'engineer'},
         {time:h(24),title:'提交签字',content:'已提交服务报告',operator:'孙工程师',operatorType:'engineer'},
         {time:h(4),title:'签字确认',content:'客户已完成签字',operator:'李总',operatorType:'customer'}],
       'eng_004','孙工程师','13900439000',h(72),h(48),h(24),h(4),null,null,
-      {repairContent:'安装调试激光切割机',replacedParts:[],testResult:'设备运行正常'},
+      {workContent:'安装调试激光切割机',repairProcess:'按安装流程完成设备就位、接线、调试',replacedParts:[],testResult:'设备运行正常'},
       'sig_base64',null,null,null)
 
     pushMock('wo_006','WO20260608006','service','repair',WorkorderStatus.ASSISTANT_CONFIRM,
-      h(120),h(8),{role:'assistant',name:'赵业务助理'},'王工','13822222222',
+      h(120),h(8),{role:'assistant',name:'赵业务助理'},'广州某工业设备有限公司','020-77773456',
       '加工中心 MC-800','PQR678','主轴异响','high','in','2026-08-15',
-      '广州市黄埔区',[
+      '广州市黄埔区开发区ZZ路56号',[
         {time:h(120),title:'工单创建',content:'业务助理提交',operator:'赵业务助理',operatorType:'assistant'},
         {time:h(96),title:'工单分配',content:'课长分配',operator:'课长',operatorType:'techLead'},
         {time:h(72),title:'工程师接单',content:'接单',operator:'周工程师',operatorType:'engineer'},
@@ -568,13 +568,13 @@ const initMockData = (force = false) => {
         {time:h(24),title:'签字确认',content:'客户签字',operator:'王工',operatorType:'customer'},
         {time:h(8),title:'课长确认',content:'课长已确认',operator:'课长',operatorType:'techLead'}],
       'eng_005','周工程师','13900539000',h(96),h(72),h(48),h(24),h(8),null,
-      {repairContent:'更换主轴轴承',replacedParts:['轴承SKF-6205'],testResult:'异响消除'},
+      {workContent:'更换主轴轴承',repairProcess:'拆解主轴箱，更换SKF-6205轴承，重新装配调试',replacedParts:['轴承SKF-6205'],testResult:'异响消除'},
       'sig_base64_2',null,null,null)
 
     pushMock('wo_007','WO20260608007','service','trial_processing',WorkorderStatus.COMPLETED,
-      h(168),h(12),{role:'customer',name:'王工'},'王工','13822222222',
+      h(168),h(12),{role:'customer',name:'王工'},'广州某工业设备有限公司','020-77773456',
       '加工中心 MC-800','STU901','试加工件表面粗糙度不合格','medium','out','2024-08-30',
-      '广州市黄埔区',[
+      '广州市黄埔区开发区ZZ路56号',[
         {time:h(168),title:'工单创建',content:'客户提交',operator:'王工',operatorType:'customer'},
         {time:h(144),title:'工单分配',content:'课长分配',operator:'课长',operatorType:'techLead'},
         {time:h(120),title:'工程师接单',content:'接单',operator:'吴工程师',operatorType:'engineer'},
@@ -583,7 +583,7 @@ const initMockData = (force = false) => {
         {time:h(48),title:'课长确认',content:'已确认',operator:'课长',operatorType:'techLead'},
         {time:h(12),title:'业务确认',content:'工单完成',operator:'业务助理',operatorType:'assistant'}],
       'eng_006','吴工程师','13900639000',h(144),h(120),h(96),h(72),h(48),h(12),
-      {repairContent:'优化切削参数，更换刀具',replacedParts:['精车刀片'],testResult:'粗糙度达标'},
+      {workContent:'优化切削参数，更换刀具',repairProcess:'调整进给速度与主轴转速，更换精车刀片',replacedParts:['精车刀片'],testResult:'粗糙度达标'},
       'sig_base64_3',null,'pdf_sample_base64',null)
 
     saveToStorage()
@@ -591,6 +591,15 @@ const initMockData = (force = false) => {
   setTimeout(() => startTimeoutChecker(), 0)
 }
 loadFromStorage() // 首次加载，若 localStorage 为空则初始化 mock 数据
+
+// ==================== 模拟工程师库 ====================
+const engineerList = [
+  { id: 'eng_001', name: '王工程师', phone: '13800000001', department: '工程课A', specialty: '维修' },
+  { id: 'eng_002', name: '陈工程师', phone: '13800000002', department: '工程课A', specialty: '维修' },
+  { id: 'eng_003', name: '刘工程师', phone: '13800000003', department: '应用加工课B', specialty: '试加工' },
+  { id: 'eng_004', name: '赵工程师', phone: '13800000004', department: '自动化改造课C', specialty: '改造' },
+  { id: 'eng_005', name: '孙工程师', phone: '13800000005', department: '工程课A', specialty: '安装' },
+]
 
 // ==================== 角色常量 ====================
 export const Roles = {
@@ -604,6 +613,9 @@ export const Roles = {
 }
 
 // ==================== 统一角色权限校验 ====================
+// 演示环境标识：演示环境下工程师可操作所有工单（不限指派人）
+export const IS_DEMO = true
+
 export const canCreateWorkorder = (role) =>
   [Roles.ADMIN, Roles.ASSISTANT, Roles.CUSTOMER].includes(role)
 
@@ -616,6 +628,7 @@ export const canAssignWorkorder = (role, workorder) => {
 export const canAcceptWorkorder = (role, workorder, userId) => {
   if (role === Roles.ADMIN) return true
   if (role === Roles.ENGINEER) {
+    if (IS_DEMO) return true // 演示环境：工程师可接所有工单
     if (!workorder || !userId) return false
     const wId = workorder.engineerId || (workorder.engineerId === 0 ? 0 : workorder.engineerId)
     return String(wId) === String(userId)
@@ -628,6 +641,7 @@ export const canRejectWorkorder = (role, workorder, userId) => canAcceptWorkorde
 export const canSubmitForSign = (role, workorder, userId) => {
   if (role === Roles.ADMIN) return true
   if (role === Roles.ENGINEER) {
+    if (IS_DEMO) return true // 演示环境：工程师可完成所有工单
     if (!workorder || !userId) return false
     return String(workorder.engineerId) === String(userId)
   }
@@ -637,10 +651,12 @@ export const canSubmitForSign = (role, workorder, userId) => {
 export const canSignWorkorder = (role, workorder, userId) => {
   if (role === Roles.ADMIN) return true
   if (role === Roles.ENGINEER) {
+    if (IS_DEMO) return true // 演示环境
     if (!workorder || !userId) return false
     return String(workorder.engineerId) === String(userId)
   }
   if (role === Roles.CUSTOMER) {
+    if (IS_DEMO) return true // 演示环境
     if (!workorder || !userId) return false
     return String(workorder.customerId) === String(userId)
   }
@@ -670,6 +686,32 @@ export const isTimeoutUnassigned = (workorder) => {
 export const getDirectorPendingPool = () => {
   return state.workorders.filter(w => isTimeoutUnassigned(w))
     .sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
+}
+
+// 课室→子类型映射
+const SUB_DEPT_MAP = {
+  '工程课A': ['repair'],
+  '应用加工课B': ['trial_processing'],
+  '自动化改造课C': ['refitting'],
+}
+
+/**
+ * 获取课长待分配池（按课室过滤）
+ * @param {string} subDepartment - 课长所属课室，如 '工程课A'
+ * @returns {Array} 该课室对应的待分配工单 + 安装工单（安装工单所有课长可见）
+ */
+export const getTechLeadPendingPool = (subDepartment) => {
+  const subTypes = SUB_DEPT_MAP[subDepartment] || []
+  return state.workorders.filter(w => {
+    if (w.status !== WorkorderStatus.PENDING_ASSIGN) return false
+    // 安装工单所有课长可见
+    if (w.category === 'installation') return true
+    // 服务工单按子类型匹配课室
+    if (subTypes.length > 0 && subTypes.includes(w.subType)) return true
+    // 没有课室信息的课长看全部（兼容）
+    if (!subDepartment) return true
+    return false
+  }).sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 }
 
 let timeoutCheckInterval = null
@@ -714,4 +756,5 @@ export {
   checkTimeoutAlarms, addFlowRecord, getFlowRecordsByWorkorder,
   getSatisfactionSurvey, getPendingSurveysByCustomer, submitSatisfactionSurvey,
   checkInWorkorder, completeWorkorder, initiateQuotation,
+  engineerList,
 }

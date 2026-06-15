@@ -17,6 +17,7 @@
       <el-table
         ref="tableRef"
         :data="data"
+        :row-key="rowKey"
         style="width: 100%"
         :height="fixedHeader ? tableHeight : undefined"
         v-bind="$attrs"
@@ -41,7 +42,7 @@
               <span class="header-label">{{ column.label }}</span>
             </el-tooltip>
           </template>
-          <template #default="scope" v-if="column.slot">
+          <template #default="scope" v-if="column.slot || $slots[column.prop]">
             <slot :name="column.prop" :row="scope.row" :$index="scope.$index"></slot>
           </template>
           <template #default="scope" v-else-if="column.formatter">
@@ -154,6 +155,10 @@ export default {
       type: Array,
       required: true
     },
+    rowKey: {
+      type: [String, Function],
+      default: 'id'
+    },
     columns: {
       type: Array,
       required: true
@@ -213,9 +218,24 @@ export default {
       if (savedConfig) {
         try {
           const config = JSON.parse(savedConfig)
+          // 版本低于2的配置缺少 slot 属性，需要重置
+          if (!config.version || config.version < 2) {
+            console.log('ConfigurableTable: 配置版本过旧，重置为默认')
+            resetToDefault()
+            saveConfig()
+            return
+          }
           // 确保 config.columns 存在且是数组，否则使用 props.columns
           if (config.columns && Array.isArray(config.columns) && config.columns.length > 0) {
-            localColumns.value = config.columns
+            // 合并 props.columns 中的 slot 等属性到已保存的列配置
+            localColumns.value = config.columns.map(savedCol => {
+              const propCol = props.columns?.find(c => c.prop === savedCol.prop)
+              return {
+                ...savedCol,
+                // 从 props.columns 补全可能缺失的属性（如 slot）
+                slot: savedCol.slot ?? propCol?.slot ?? false
+              }
+            })
           } else if (props.columns && Array.isArray(props.columns)) {
             localColumns.value = props.columns.map(col => ({ ...col, visible: true }))
           } else {
@@ -252,6 +272,7 @@ export default {
     // 保存配置到本地存储
     const saveConfig = () => {
       const config = {
+        version: 2, // v2: 包含 slot 属性
         columns: localColumns.value.map(col => ({
           prop: col.prop,
           label: col.label,
@@ -259,7 +280,8 @@ export default {
           fixed: col.fixed,
           width: col.width,
           minWidth: col.minWidth,
-          sortable: col.sortable
+          sortable: col.sortable,
+          slot: col.slot
         })),
         fixedHeader: localFixedHeader.value,
         tableHeight: localTableHeight.value

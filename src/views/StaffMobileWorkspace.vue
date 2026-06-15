@@ -6,7 +6,7 @@
         <el-avatar :size="50" :icon="UserFilled" />
         <div class="user-details">
           <h3>{{ staffInfo.name }}</h3>
-          <p>{{ staffInfo.role }} | {{ staffInfo.department }}</p>
+          <p>{{ staffInfo.roleDisplay || staffInfo.role }} | {{ staffInfo.department }}</p>
         </div>
       </div>
       <div class="header-actions">
@@ -17,7 +17,7 @@
     </div>
 
     <!-- 部长：超时未分配工单提醒 -->
-    <div v-if="directorPendingCount > 0" class="timeout-alert-section" @click="goToDirectorPending">
+    <div v-if="directorPendingCount > 0" class="timeout-alert-section" @click="openAssignDialog(getDirectorPendingPool()[0])">
       <div class="alert-card alert-danger">
         <div class="alert-icon">
           <el-icon><Warning /></el-icon>
@@ -29,7 +29,7 @@
           <div class="alert-desc">请及时分配处理，避免影响客户满意度</div>
         </div>
         <div class="alert-action">
-          <el-button type="danger" size="small" round>去分配</el-button>
+          <el-button type="danger" size="small" round>分配</el-button>
           <el-icon class="arrow"><ArrowRight /></el-icon>
         </div>
       </div>
@@ -130,27 +130,27 @@
       </div>
     </div>
 
-    <!-- 课长：待处理工单提醒 -->
-    <div v-if="isManager && pendingWorkorders.length > 0" class="pending-section">
+    <!-- 待处理工单提醒（按角色显示不同内容） -->
+    <div v-if="myPendingItems.length > 0" class="pending-section">
       <div class="section-header">
         <h4>待处理</h4>
-        <el-badge :value="pendingWorkorders.length" type="danger" />
+        <el-badge :value="myPendingItems.length" type="danger" />
       </div>
       <div
-        v-for="workorder in pendingWorkorders.slice(0, 3)"
-        :key="workorder.id"
+        v-for="item in myPendingItems.slice(0, 5)"
+        :key="item.id + '-' + item.pendingType"
         class="pending-card"
-        @click="goToTechLeadWorkorders"
+        @click="handlePendingAction(item)"
       >
         <div class="pending-icon">
           <el-icon><Warning /></el-icon>
         </div>
         <div class="pending-content">
-          <div class="pending-title">新报修工单待分配</div>
-          <div class="pending-desc">{{ workorder.workorderId }} - {{ workorder.faultDescription?.substring(0, 20) }}...</div>
+          <div class="pending-title">{{ item.pendingTitle }}</div>
+          <div class="pending-desc">{{ item.customerName || '未知客户' }}</div>
         </div>
         <div class="pending-action">
-          <el-button type="primary" size="small" round>去分配</el-button>
+          <el-button type="primary" size="small" round>{{ item.pendingAction }}</el-button>
           <el-icon class="arrow"><ArrowRight /></el-icon>
         </div>
       </div>
@@ -210,70 +210,141 @@
 
     <!-- 快捷功能入口 -->
     <div class="quick-actions">
-      <div class="action-grid" :class="{ 'manager-grid': isManager }">
-        <!-- 课长/经理专属功能 -->
-        <!-- 团队管理（课长隐藏） -->
-        <div v-if="hasTeamAccess" class="action-item team" @click="goToTeamManagement">
-          <div class="action-icon">
-            <el-icon><UserIcon /></el-icon>
-            <el-badge v-if="teamMembers.length > 0" :value="teamMembers.length" class="action-badge" />
+      <div class="action-grid" :key="currentUserRole">
+        <!-- 管理员：工单管理、审批管理、打卡、BI数据 -->
+        <template v-if="currentUserRole === 'admin'">
+          <div class="action-item workorder" @click="goToWorkorderManage">
+            <div class="action-icon"><el-icon><Document /></el-icon></div>
+            <span class="action-label">工单管理</span>
+            <span class="action-desc">管理所有工单</span>
           </div>
-          <span class="action-label">团队管理</span>
-          <span class="action-desc">查看团队成员</span>
-        </div>
-        
-        <!-- 审批管理 -->
-        <div v-if="isManager" class="action-item approval" @click="goToPendingApprovals">
-          <div class="action-icon">
-            <el-icon><CircleCheck /></el-icon>
-            <el-badge v-if="teamStats.pendingApproval > 0" :value="teamStats.pendingApproval" class="action-badge" />
+          <div class="action-item approval" @click="goToPendingApprovals">
+            <div class="action-icon">
+              <el-icon><CircleCheck /></el-icon>
+              <el-badge v-if="teamStats.pendingApproval > 0" :value="teamStats.pendingApproval" class="action-badge" />
+            </div>
+            <span class="action-label">审批管理</span>
+            <span class="action-desc">打卡审批处理</span>
           </div>
-          <span class="action-label">审批管理</span>
-          <span class="action-desc">打卡审批处理</span>
-        </div>
-        
-        <!-- 团队统计（课长隐藏） -->
-        <div v-if="hasTeamAccess" class="action-item statistics" @click="goToTeamStatistics">
-          <div class="action-icon">
-            <el-icon><TrendCharts /></el-icon>
+          <div class="action-item field" @click="goToFieldCheckinList">
+            <div class="action-icon"><el-icon><MapLocation /></el-icon></div>
+            <span class="action-label">打卡</span>
+            <span class="action-desc">当日外勤打卡</span>
           </div>
-          <span class="action-label">团队统计</span>
-          <span class="action-desc">工作数据分析</span>
-        </div>
-        
-        <div class="action-item scan" @click="openScan">
-          <div class="action-icon">
-            <el-icon><Camera /></el-icon>
+          <div class="action-item bi" @click="goToBI">
+            <div class="action-icon"><el-icon><TrendCharts /></el-icon></div>
+            <span class="action-label">BI数据</span>
+            <span class="action-desc">数据大屏分析</span>
           </div>
-          <span class="action-label">扫码</span>
-          <span class="action-desc">设备/工单扫码</span>
-        </div>
-        
-        <div class="action-item workorder" @click="handleWorkorderClick">
-          <div class="action-icon">
-            <el-icon><Document /></el-icon>
-            <el-badge v-if="stats.pending > 0 && isManager" :value="stats.pending" class="action-badge" />
+        </template>
+
+        <!-- 业务助理：新建工单、我的工单、打卡、待签字 -->
+        <template v-if="currentUserRole === 'assistant'">
+          <div class="action-item create" @click="goToCreateWorkorder">
+            <div class="action-icon"><el-icon><Plus /></el-icon></div>
+            <span class="action-label">新建工单</span>
+            <span class="action-desc">创建服务工单</span>
           </div>
-          <span class="action-label">{{ hasTeamAccess ? '团队工单' : '我的工单' }}</span>
-          <span class="action-desc">{{ hasTeamAccess ? '查看团队工单' : (isManager ? '查看我的工单' : '创建新工单') }}</span>
-        </div>
-        
-        <div class="action-item field" @click="goToFieldCheckinList">
-          <div class="action-icon">
-            <el-icon><MapLocation /></el-icon>
+          <div class="action-item workorder" @click="goToMyWorkorders">
+            <div class="action-icon"><el-icon><Document /></el-icon></div>
+            <span class="action-label">我的工单</span>
+            <span class="action-desc">查看工单列表</span>
           </div>
-          <span class="action-label">打卡</span>
-          <span class="action-desc">当日外勤打卡</span>
-        </div>
-        
-        <div class="action-item sign" @click="goToPendingSign">
-          <div class="action-icon">
-            <el-icon><EditPen /></el-icon>
-            <el-badge v-if="stats.pendingSign > 0" :value="stats.pendingSign" class="action-badge" />
+          <div class="action-item field" @click="goToFieldCheckinList">
+            <div class="action-icon"><el-icon><MapLocation /></el-icon></div>
+            <span class="action-label">打卡</span>
+            <span class="action-desc">当日外勤打卡</span>
           </div>
-          <span class="action-label">待签字</span>
-          <span class="action-desc">客户签字确认</span>
-        </div>
+          <div class="action-item sign" @click="goToPendingSign">
+            <div class="action-icon">
+              <el-icon><EditPen /></el-icon>
+              <el-badge v-if="stats.pendingSign > 0" :value="stats.pendingSign" class="action-badge" />
+            </div>
+            <span class="action-label">待签字</span>
+            <span class="action-desc">客户签字确认</span>
+          </div>
+        </template>
+
+        <!-- 课长：审批管理、工单管理、打卡、BI数据 -->
+        <template v-if="currentUserRole === 'techLead'">
+          <div class="action-item approval" @click="goToPendingApprovals">
+            <div class="action-icon">
+              <el-icon><CircleCheck /></el-icon>
+              <el-badge v-if="teamStats.pendingApproval > 0" :value="teamStats.pendingApproval" class="action-badge" />
+            </div>
+            <span class="action-label">审批管理</span>
+            <span class="action-desc">打卡审批处理</span>
+          </div>
+          <div class="action-item workorder" @click="goToTechLeadWorkorders">
+            <div class="action-icon"><el-icon><Document /></el-icon></div>
+            <span class="action-label">工单管理</span>
+            <span class="action-desc">分配与确认工单</span>
+          </div>
+          <div class="action-item field" @click="goToFieldCheckinList">
+            <div class="action-icon"><el-icon><MapLocation /></el-icon></div>
+            <span class="action-label">打卡</span>
+            <span class="action-desc">当日外勤打卡</span>
+          </div>
+          <div class="action-item bi" @click="goToBI">
+            <div class="action-icon"><el-icon><TrendCharts /></el-icon></div>
+            <span class="action-label">BI数据</span>
+            <span class="action-desc">数据大屏分析</span>
+          </div>
+        </template>
+
+        <!-- 部长：审批管理、工单管理、打卡、BI数据 -->
+        <template v-if="currentUserRole === 'director'">
+          <div class="action-item approval" @click="goToPendingApprovals">
+            <div class="action-icon">
+              <el-icon><CircleCheck /></el-icon>
+              <el-badge v-if="teamStats.pendingApproval > 0" :value="teamStats.pendingApproval" class="action-badge" />
+            </div>
+            <span class="action-label">审批管理</span>
+            <span class="action-desc">打卡审批处理</span>
+          </div>
+          <div class="action-item workorder" @click="goToWorkorderManage">
+            <div class="action-icon"><el-icon><Document /></el-icon></div>
+            <span class="action-label">工单管理</span>
+            <span class="action-desc">管理所有工单</span>
+          </div>
+          <div class="action-item field" @click="goToFieldCheckinList">
+            <div class="action-icon"><el-icon><MapLocation /></el-icon></div>
+            <span class="action-label">打卡</span>
+            <span class="action-desc">当日外勤打卡</span>
+          </div>
+          <div class="action-item bi" @click="goToBI">
+            <div class="action-icon"><el-icon><TrendCharts /></el-icon></div>
+            <span class="action-label">BI数据</span>
+            <span class="action-desc">数据大屏分析</span>
+          </div>
+        </template>
+
+        <!-- 工程师：扫码、我的工单、打卡、待签字 -->
+        <template v-if="currentUserRole === 'engineer'">
+          <div class="action-item scan" @click="openScan">
+            <div class="action-icon"><el-icon><Camera /></el-icon></div>
+            <span class="action-label">扫码</span>
+            <span class="action-desc">设备/工单扫码</span>
+          </div>
+          <div class="action-item workorder" @click="goToMyWorkorders">
+            <div class="action-icon"><el-icon><Document /></el-icon></div>
+            <span class="action-label">我的工单</span>
+            <span class="action-desc">查看工单列表</span>
+          </div>
+          <div class="action-item field" @click="goToFieldCheckinList">
+            <div class="action-icon"><el-icon><MapLocation /></el-icon></div>
+            <span class="action-label">打卡</span>
+            <span class="action-desc">当日外勤打卡</span>
+          </div>
+          <div class="action-item sign" @click="goToPendingSign">
+            <div class="action-icon">
+              <el-icon><EditPen /></el-icon>
+              <el-badge v-if="stats.pendingSign > 0" :value="stats.pendingSign" class="action-badge" />
+            </div>
+            <span class="action-label">待签字</span>
+            <span class="action-desc">客户签字确认</span>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -363,22 +434,118 @@
           <div class="card-footer">
             <span class="order-time">{{ formatDate(order.createTime) }}</span>
             <div class="action-buttons">
-              <!-- 待分配：课长/管理员分配 -->
-              <el-button v-if="order.status === 'pending_assign' && isTechLead" type="primary" size="small" @click.stop="goToAssign(order)">分配</el-button>
-              <!-- 待接单：工程师接单/弃单 -->
-              <el-button v-if="order.status === 'pending_accept' && isEngineer" type="primary" size="small" @click.stop="acceptWorkorder(order)">接单</el-button>
-              <el-button v-if="order.status === 'pending_accept' && isEngineer" type="warning" size="small" @click.stop="rejectWorkorderMobile(order)">弃单</el-button>
-              <!-- 进行中：工程师完成 -->
-              <el-button v-if="order.status === 'processing' && isEngineer" type="success" size="small" @click.stop="completeWorkorder(order)">完成</el-button>
-              <!-- 课长确认 -->
-              <el-button v-if="order.status === 'techlead_confirm' && isTechLead" type="primary" size="small" @click.stop="techLeadConfirmMobile(order)">课长确认</el-button>
-              <!-- 业务确认 -->
-              <el-button v-if="order.status === 'assistant_confirm' && isAssistant" type="primary" size="small" @click.stop="assistantConfirmMobile(order)">业务确认</el-button>
+              <!-- 待分配：课长/管理员/部长(超2h)分配 -->
+              <el-button v-if="order.status === 'pending_assign' && (isTechLead || currentUserRole === 'techLead' || currentUserRole === 'admin' || (currentUserRole === 'director'))" type="primary" size="small" @click.stop="openAssignDialog(order)">分配</el-button>
+              <!-- 待接单：工程师/管理员接单弃单 -->
+              <el-button v-if="order.status === 'pending_accept' && (isEngineer || currentUserRole === 'admin')" type="primary" size="small" @click.stop="acceptWorkorder(order)">接单</el-button>
+              <el-button v-if="order.status === 'pending_accept' && (isEngineer || currentUserRole === 'admin')" type="warning" size="small" @click.stop="rejectWorkorderMobile(order)">弃单</el-button>
+              <!-- 进行中：工程师/管理员打卡+完成 -->
+              <el-button v-if="order.status === 'processing' && (isEngineer || currentUserRole === 'admin')" type="primary" size="small" :disabled="hasCheckedIn(order)" @click.stop="goToCheckInFromWorkorder(order)">{{ hasCheckedIn(order) ? '已打卡' : '打卡' }}</el-button>
+              <el-button v-if="order.status === 'processing' && (isEngineer || currentUserRole === 'admin')" type="success" size="small" @click.stop="completeWorkorder(order)">完成</el-button>
+              <!-- 待签字：查看详情 -->
+              <el-button v-if="order.status === 'pending_sign'" type="primary" size="small" @click.stop="viewWorkorderDetail(order)">签字</el-button>
+              <!-- 课长确认：课长/管理员 -->
+              <el-button v-if="order.status === 'techlead_confirm' && (isTechLead || currentUserRole === 'techLead' || currentUserRole === 'admin')" type="primary" size="small" @click.stop="techLeadConfirmMobile(order)">课长确认</el-button>
+              <!-- 业务确认：业务助理/管理员 -->
+              <el-button v-if="order.status === 'assistant_confirm' && (isAssistant || currentUserRole === 'assistant' || currentUserRole === 'admin')" type="primary" size="small" @click.stop="assistantConfirmMobile(order)">业务确认</el-button>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 分配工程师对话框 -->
+    <el-dialog
+      v-model="assignDialogVisible"
+      title="分配工程师"
+      width="95%"
+      :show-close="false"
+      class="mobile-dialog assign-mobile-dialog"
+      :fullscreen="true"
+    >
+      <template #header>
+        <div class="repair-dialog-header">
+          <span class="repair-title">分配工程师</span>
+          <el-button link @click="assignDialogVisible = false">
+            <el-icon><Close /></el-icon>
+          </el-button>
+        </div>
+      </template>
+      <div v-if="assignWorkorderData" class="assign-dialog-content">
+        <!-- 工单基础信息 -->
+        <div class="assign-info-section">
+          <div class="assign-section-title">工单信息</div>
+          <div class="assign-info-row"><span class="label">工单号</span><span class="value">{{ assignWorkorderData.workorderId }}</span></div>
+          <div class="assign-info-row"><span class="label">工单类型</span><span class="value">{{ getCategoryText(assignWorkorderData.category) }}{{ assignWorkorderData.subType ? '·' + getSubTypeText(assignWorkorderData.subType) : '' }}</span></div>
+          <div class="assign-info-row"><span class="label">客户公司</span><span class="value">{{ assignWorkorderData.customerName }}</span></div>
+          <div class="assign-info-row"><span class="label">联系电话</span><span class="value">{{ assignWorkorderData.customerPhone }}</span></div>
+          <div class="assign-info-row"><span class="label">地址</span><span class="value">{{ assignWorkorderData.address }}</span></div>
+          <div class="assign-info-pair">
+            <div class="assign-info-item"><span class="label">设备型号</span><span class="value">{{ assignWorkorderData.deviceModel || '-' }}</span></div>
+            <div class="assign-info-item"><span class="label">序列号</span><span class="value">{{ assignWorkorderData.serialNumber || '-' }}</span></div>
+          </div>
+          <div class="assign-info-row"><span class="label">保修状态</span><span class="value"><el-tag :type="getWarrantyTagType(assignWorkorderData.warrantyStatus)" size="small">{{ getWarrantyText(assignWorkorderData.warrantyStatus) }}</el-tag></span></div>
+          <div class="assign-info-desc"><span class="label">故障描述</span><div class="value">{{ assignWorkorderData.faultDescription }}</div></div>
+        </div>
+
+        <el-divider />
+
+        <el-form label-position="top">
+          <el-form-item label="选择工程师" required>
+            <el-select
+              v-model="assignFormData.selectedEngineerIds"
+              multiple
+              placeholder="请选择工程师（可多选）"
+              style="width: 100%"
+              filterable
+            >
+              <el-option
+                v-for="eng in engineerList"
+                :key="eng.id"
+                :label="`${eng.name}（${eng.department}·${eng.specialty}）`"
+                :value="eng.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="工作内容">
+            <el-input v-model="assignFormData.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+          </el-form-item>
+          <el-form-item label="工作开始时间">
+            <el-date-picker
+              v-model="assignFormData.workStartTime"
+              type="datetime"
+              placeholder="选择开始时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="预定完成时间">
+            <el-date-picker
+              v-model="assignFormData.workEndTime"
+              type="datetime"
+              placeholder="选择完成时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="使用车辆">
+            <el-radio-group v-model="assignFormData.vehicle">
+              <el-radio label="self">自备</el-radio>
+              <el-radio label="company">公司车辆</el-radio>
+              <el-radio label="public">公共交通</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <div class="repair-footer">
+          <el-button size="large" @click="assignDialogVisible = false">取消</el-button>
+          <el-button type="primary" size="large" @click="confirmAssign" :disabled="assignFormData.selectedEngineerIds.length === 0">确认分配</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <!-- 底部导航 -->
     <div class="bottom-nav">
@@ -488,9 +655,11 @@ import {
   OfficeBuilding,
   User as UserIcon,
   TrendCharts,
-  CircleCheck
+  CircleCheck,
+  Plus,
+  Close
 } from '@element-plus/icons-vue'
-import { getTechLeadPendingWorkorders, state as workorderFlowState, acceptWorkorder as storeAcceptWorkorder, submitForSign, rejectWorkorder, techLeadConfirm, assistantConfirm, getVisibleWorkorders, getDirectorPendingPool, isTimeoutUnassigned } from '../stores/workorderFlowStore.js'
+import { getTechLeadPendingWorkorders, getTechLeadPendingPool, state as workorderFlowState, acceptWorkorder as storeAcceptWorkorder, submitForSign, rejectWorkorder, techLeadConfirm, assistantConfirm, getVisibleWorkorders, getDirectorPendingPool, isTimeoutUnassigned, engineerList, assignWorkorder } from '../stores/workorderFlowStore.js'
 
 const router = useRouter()
 
@@ -498,6 +667,7 @@ const router = useRouter()
 const staffInfo = reactive({
   name: '',
   role: '',
+  roleDisplay: '',
   department: '技术服务部'
 })
 
@@ -511,27 +681,46 @@ const loadUserInfo = () => {
       console.log('解析后的用户信息:', parsed)
       staffInfo.name = parsed.name || staffInfo.name
       staffInfo.role = parsed.role || staffInfo.role
+      staffInfo.roleDisplay = parsed.roleDisplay || parsed.role || staffInfo.roleDisplay
       staffInfo.department = parsed.department || staffInfo.department
       console.log('更新后的 staffInfo:', staffInfo)
     } catch (e) {
       console.error('解析用户信息失败:', e)
     }
   }
+  // 兜底：从 staffAuth 获取英文 role（确保角色判断正确）
+  if (!['admin', 'assistant', 'engineer', 'techLead', 'director'].includes(staffInfo.role)) {
+    try {
+      const staffAuth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+      if (staffAuth.role && ['admin', 'assistant', 'engineer', 'techLead', 'director'].includes(staffAuth.role)) {
+        console.log('从 staffAuth 兜底获取 role:', staffAuth.role)
+        staffInfo.role = staffAuth.role
+      }
+    } catch (e) {}
+  }
 }
 
 // 是否为审批者（课长、部长、经理等角色）
 const isApprover = computed(() => {
-  return ['课长', '部长', '经理', '部门负责人', 'techLead', 'director', '系统管理员', 'admin'].includes(staffInfo.role)
+  if (['techLead', 'director', 'admin'].includes(staffInfo.role)) return true
+  if (['课长', '部长', '经理', '部门负责人', '系统管理员'].includes(staffInfo.role)) return true
+  return false
 })
 
 // 是否为课长（分配工单、课长确认权限）
 const isTechLead = computed(() => {
-  return ['课长', 'techLead', '系统管理员', 'admin'].includes(staffInfo.role)
+  if (['techLead', 'admin'].includes(staffInfo.role)) return true
+  if (['课长', '系统管理员'].includes(staffInfo.role)) return true
+  return false
 })
 
 // 是否为工程师（接单弃单权限）
 const isEngineer = computed(() => {
-  return ['工程师', 'engineer', '系统管理员', 'admin'].includes(staffInfo.role)
+  if (['engineer', 'admin'].includes(staffInfo.role)) return true
+  if (['工程师', '系统管理员'].includes(staffInfo.role)) return true
+  // 兼容旧数据：角色名为具体工程师名（如"王工程师"）
+  if (staffInfo.role && staffInfo.role.includes('工程师') && !['课长', '部长'].some(k => staffInfo.role.includes(k))) return true
+  return false
 })
 
 // 是否为业务助理（业务确认权限）
@@ -684,51 +873,143 @@ const loadWorkorders = () => {
     customerName: w.customerName,
     customerPhone: w.customerPhone,
     address: w.address,
+    engineerName: w.engineerName,
+    category: w.category,
+    subType: w.subType,
+    serialNumber: w.serialNumber,
+    warrantyStatus: w.warrantyStatus,
     createTime: new Date(w.createTime),
     type: 'workorder'
   }))
 }
 
-// 工单分类标签（展示全部7个流程节点）
+// 工单分类标签（根据角色动态生成，工程师不展示"待分配"）
 const activeTab = ref('all')
 
-const workorderTabs = computed(() => [
-  { key: 'all', name: '全部', count: recentWorkorders.value.length },
-  { key: 'pending_assign', name: '待分配', count: recentWorkorders.value.filter(w => w.status === 'pending_assign').length },
-  { key: 'pending_accept', name: '待接单', count: recentWorkorders.value.filter(w => w.status === 'pending_accept').length },
-  { key: 'processing', name: '进行中', count: recentWorkorders.value.filter(w => w.status === 'processing').length },
-  { key: 'pending_sign', name: '待签字', count: recentWorkorders.value.filter(w => w.status === 'pending_sign').length },
-  { key: 'techlead_confirm', name: '课长确认', count: recentWorkorders.value.filter(w => w.status === 'techlead_confirm').length },
-  { key: 'assistant_confirm', name: '业务确认', count: recentWorkorders.value.filter(w => w.status === 'assistant_confirm').length },
-  { key: 'completed', name: '已完成', count: recentWorkorders.value.filter(w => w.status === 'completed').length }
-])
+// 是否应该展示"待分配"标签
+const showPendingAssignTab = computed(() => {
+  return ['admin', 'assistant', 'techLead', 'director', 'customer'].includes(currentUserRole)
+})
+
+const workorderTabs = computed(() => {
+  const tabs = [
+    { key: 'all', name: '全部', count: recentWorkorders.value.length },
+  ]
+  if (showPendingAssignTab.value) {
+    tabs.push({ key: 'pending_assign', name: '待分配', count: recentWorkorders.value.filter(w => w.status === 'pending_assign').length })
+  }
+  tabs.push(
+    { key: 'pending_accept', name: '待接单', count: recentWorkorders.value.filter(w => w.status === 'pending_accept').length },
+    { key: 'processing', name: '进行中', count: recentWorkorders.value.filter(w => w.status === 'processing').length },
+    { key: 'pending_sign', name: '待签字', count: recentWorkorders.value.filter(w => w.status === 'pending_sign').length },
+    { key: 'techlead_confirm', name: '课长确认', count: recentWorkorders.value.filter(w => w.status === 'techlead_confirm').length },
+    { key: 'assistant_confirm', name: '业务确认', count: recentWorkorders.value.filter(w => w.status === 'assistant_confirm').length },
+    { key: 'completed', name: '已完成', count: recentWorkorders.value.filter(w => w.status === 'completed').length }
+  )
+  return tabs
+})
 
 // 筛选后的工单列表
 const filteredWorkorders = computed(() => {
   const sortByTime = (arr) => [...arr].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
+  // 工程师在"全部"视图中不展示待分配工单
+  const baseList = currentUserRole === 'engineer'
+    ? recentWorkorders.value.filter(w => w.status !== 'pending_assign')
+    : recentWorkorders.value
   switch (activeTab.value) {
     case 'pending_assign':
-      return sortByTime(recentWorkorders.value.filter(w => w.status === 'pending_assign'))
+      return sortByTime(baseList.filter(w => w.status === 'pending_assign'))
     case 'pending_accept':
-      return sortByTime(recentWorkorders.value.filter(w => w.status === 'pending_accept'))
+      return sortByTime(baseList.filter(w => w.status === 'pending_accept'))
     case 'processing':
-      return sortByTime(recentWorkorders.value.filter(w => w.status === 'processing'))
+      return sortByTime(baseList.filter(w => w.status === 'processing'))
     case 'pending_sign':
-      return sortByTime(recentWorkorders.value.filter(w => w.status === 'pending_sign'))
+      return sortByTime(baseList.filter(w => w.status === 'pending_sign'))
     case 'techlead_confirm':
-      return sortByTime(recentWorkorders.value.filter(w => w.status === 'techlead_confirm'))
+      return sortByTime(baseList.filter(w => w.status === 'techlead_confirm'))
     case 'assistant_confirm':
-      return sortByTime(recentWorkorders.value.filter(w => w.status === 'assistant_confirm'))
+      return sortByTime(baseList.filter(w => w.status === 'assistant_confirm'))
     case 'completed':
-      return sortByTime(recentWorkorders.value.filter(w => w.status === 'completed'))
+      return sortByTime(baseList.filter(w => w.status === 'completed'))
     default:
-      return sortByTime(recentWorkorders.value)
+      return sortByTime(baseList)
   }
 })
 
-// 待分配工单列表（用于待处理提醒）
+// 待分配工单列表（按角色过滤）
 const pendingWorkorders = computed(() => {
-  return recentWorkorders.value.filter(w => w.status === 'pending_assign')
+  if (currentUserRole === 'techLead') {
+    // 课长：只看自己课室的待分配池
+    const subDept = auth.subDepartment || ''
+    return getTechLeadPendingPool(subDept)
+  } else if (currentUserRole === 'director') {
+    // 部长：只看超2小时未分配的
+    return getDirectorPendingPool()
+  } else if (currentUserRole === 'admin' || currentUserRole === 'assistant') {
+    // 管理员/业务助理：看全部待分配
+    return recentWorkorders.value.filter(w => w.status === 'pending_assign')
+  } else if (currentUserRole === 'customer') {
+    // 客户：只看自己创建的待分配
+    const customerName = auth.name || ''
+    return recentWorkorders.value.filter(w => w.status === 'pending_assign' && (w.createdBy?.name === customerName || w.customerName === customerName))
+  }
+  return []
+})
+
+// 待接单工单列表（工程师 - 演示环境看全部待接单）
+const pendingAcceptWorkorders = computed(() => {
+  if (currentUserRole !== 'engineer' && currentUserRole !== 'admin') return []
+  return recentWorkorders.value.filter(w => w.status === 'pending_accept')
+})
+
+// 待业务确认工单列表（业务助理）
+const pendingAssistantConfirmWorkorders = computed(() => {
+  if (currentUserRole !== 'assistant' && currentUserRole !== 'admin') return []
+  return recentWorkorders.value.filter(w => w.status === 'assistant_confirm')
+})
+
+// 待签字工单列表（工程师 - 演示环境看全部待签字）
+const pendingSignWorkorders = computed(() => {
+  if (currentUserRole !== 'engineer' && currentUserRole !== 'admin') return []
+  return recentWorkorders.value.filter(w => w.status === 'pending_sign')
+})
+
+// 课长确认工单列表（课长）
+const pendingTechLeadConfirmWorkorders = computed(() => {
+  if (currentUserRole !== 'techLead' && currentUserRole !== 'admin') return []
+  return recentWorkorders.value.filter(w => w.status === 'techlead_confirm')
+})
+
+// 统一的待处理列表（按角色聚合）
+const myPendingItems = computed(() => {
+  const items = []
+  // 课长/部长/管理员 → 待分配
+  if (isManager.value || currentUserRole === 'admin') {
+    pendingWorkorders.value.forEach(w => {
+      items.push({ ...w, pendingType: 'assign', pendingTitle: '新工单待分配', pendingAction: '分配', pendingActionFn: 'openAssignDialog' })
+    })
+  }
+  // 课长 → 课长确认
+  if (currentUserRole === 'techLead' || currentUserRole === 'admin') {
+    pendingTechLeadConfirmWorkorders.value.forEach(w => {
+      items.push({ ...w, pendingType: 'techlead_confirm', pendingTitle: '工单待确认', pendingAction: '去确认', pendingActionFn: 'goToWorkorderConfirm' })
+    })
+  }
+  // 工程师 → 待接单
+  pendingAcceptWorkorders.value.forEach(w => {
+    items.push({ ...w, pendingType: 'accept', pendingTitle: '工单待接单', pendingAction: '去接单', pendingActionFn: 'goToAcceptList' })
+  })
+  // 工程师 → 待签字
+  pendingSignWorkorders.value.forEach(w => {
+    items.push({ ...w, pendingType: 'sign', pendingTitle: '工单待签字', pendingAction: '去签字', pendingActionFn: 'goToSignList' })
+  })
+  // 业务助理 → 待业务确认
+  if (currentUserRole === 'assistant' || currentUserRole === 'admin') {
+    pendingAssistantConfirmWorkorders.value.forEach(w => {
+      items.push({ ...w, pendingType: 'assistant_confirm', pendingTitle: '工单待业务确认', pendingAction: '去确认', pendingActionFn: 'goToAssistantConfirmList' })
+    })
+  }
+  return items
 })
 
 import { getPendingWorkorderQuotations } from '../stores/quotationStore.js'
@@ -804,6 +1085,22 @@ const goToFieldCheckinList = () => {
   router.push('/staff-field-checkin-list')
 }
 
+const goToWorkorderManage = () => {
+  router.push('/workorder')
+}
+
+const goToMyWorkorders = () => {
+  router.push('/staff-workorder-list?filter=all')
+}
+
+const goToCreateWorkorder = () => {
+  router.push('/staff-workorder-create')
+}
+
+const goToBI = () => {
+  window.location.href = 'http://bi-demo.fastma.com.cn/bi_akl/akl_home.html'
+}
+
 const goToFieldCheckinListWithFilter = (filter) => {
   router.push(`/staff-field-checkin-list?filter=${filter}`)
 }
@@ -835,6 +1132,7 @@ const goToPendingSign = () => {
 }
 
 const viewWorkorderDetail = (order) => {
+  sessionStorage.setItem('workspace_activeTab', activeTab.value)
   router.push(`/staff-workorder-detail?id=${order.id}`)
 }
 
@@ -848,13 +1146,93 @@ const completeWorkorder = (order) => {
   ElMessage.success(`工单完成: ${order.workorderId}`)
 }
 
+// 判断工单是否已打卡签到
+const hasCheckedIn = (order) => {
+  try {
+    const records = JSON.parse(localStorage.getItem('checkinRecords') || '[]')
+    const wid = order.workorderId || order.id
+    return records.some(r => r.workorderId === wid && r.status === '已签到')
+  } catch { return false }
+}
+
+const goToCheckInFromWorkorder = (order) => {
+  router.push({
+    path: '/staff-checkin',
+    query: {
+      from: 'workorder',
+      workorderId: order.workorderId || order.id,
+      customerName: order.customerName || ''
+    }
+  })
+}
+
 const rejectWorkorderMobile = (order) => {
   rejectWorkorder(order.id, '工程师弃单')
   ElMessage.success(`已弃单: ${order.workorderId}`)
 }
 
-const goToAssign = (order) => {
-  router.push(`/staff-workorder-detail?id=${order.id}&action=assign`)
+// 分配工程师对话框
+const assignDialogVisible = ref(false)
+const assignWorkorderData = ref(null)
+const assignFormData = reactive({
+  selectedEngineerIds: [],
+  workContent: '',
+  workStartTime: null,
+  workEndTime: null,
+  vehicle: 'self'
+})
+
+const getCategoryText = (cat) => {
+  const map = { installation: '安装工单', service: '服务工单' }
+  return map[cat] || cat
+}
+const getSubTypeText = (sub) => {
+  const map = { repair: '维修', trial_processing: '试加工', refitting: '改造' }
+  return map[sub] || sub
+}
+const getWarrantyText = (ws) => {
+  const map = { in_warranty: '保内', out_of_warranty: '保外', expired: '过保', in: '保内', out: '保外', unknown: '未知' }
+  return map[ws] || ws
+}
+const getWarrantyTagType = (ws) => {
+  const map = { in_warranty: 'success', out_of_warranty: 'warning', expired: 'danger', in: 'success', out: 'danger', unknown: 'info' }
+  return map[ws] || 'info'
+}
+
+const openAssignDialog = (workorder) => {
+  // 从 store 获取完整工单数据
+  const fullWo = workorderFlowState.workorders.find(w => w.id === (workorder.id || workorder.rawId))
+  assignWorkorderData.value = fullWo || workorder
+  assignFormData.selectedEngineerIds = []
+  assignFormData.workContent = ''
+  assignFormData.workStartTime = null
+  assignFormData.workEndTime = null
+  assignFormData.vehicle = 'self'
+  assignDialogVisible.value = true
+}
+
+const confirmAssign = () => {
+  if (assignFormData.selectedEngineerIds.length === 0) {
+    ElMessage.warning('请选择工程师')
+    return
+  }
+  const primaryEng = engineerList.find(e => e.id === assignFormData.selectedEngineerIds[0])
+  if (!primaryEng) return
+  const selectedEngineers = assignFormData.selectedEngineerIds.map(id => {
+    const eng = engineerList.find(e => e.id === id)
+    return eng ? { id: eng.id, name: eng.name, phone: eng.phone } : null
+  }).filter(Boolean)
+
+  assignWorkorder(assignWorkorderData.value.id || assignWorkorderData.value.rawId, primaryEng.id, primaryEng.name, primaryEng.phone, {
+    engineers: selectedEngineers,
+    workContent: assignFormData.workContent,
+    workStartTime: assignFormData.workStartTime || '',
+    workEndTime: assignFormData.workEndTime || '',
+    vehicle: assignFormData.vehicle
+  })
+  ElMessage.success(`已分配给 ${primaryEng.name}${selectedEngineers.length > 1 ? ` 等${selectedEngineers.length}人` : ''}`)
+  assignDialogVisible.value = false
+  loadWorkorders()
 }
 
 const techLeadConfirmMobile = (order) => {
@@ -906,16 +1284,35 @@ const goToTeamCheckins = () => {
   router.push('/staff-field-checkin-list?filter=all&scope=team')
 }
 
-const goToDirectorPending = () => {
-  router.push('/staff-workorder-list?filter=pending_assign')
-}
-
 const goToTeamStatistics = () => {
   router.push('/team-statistics')
 }
 
 const goToTechLeadWorkorders = () => {
   router.push('/techlead-workorder-manage')
+}
+
+// 待处理卡片点击跳转
+const handlePendingAction = (item) => {
+  switch (item.pendingActionFn) {
+    case 'openAssignDialog':
+      openAssignDialog(item)
+      break
+    case 'goToWorkorderConfirm':
+      router.push(`/staff-workorder-detail?id=${item.id || item.workorderId}&action=confirm`)
+      break
+    case 'goToAcceptList':
+      router.push(`/staff-workorder-detail?id=${item.id || item.workorderId}&action=accept`)
+      break
+    case 'goToSignList':
+      router.push(`/staff-workorder-detail?id=${item.id || item.workorderId}&action=sign`)
+      break
+    case 'goToAssistantConfirmList':
+      router.push(`/staff-workorder-detail?id=${item.id || item.workorderId}&action=confirm`)
+      break
+    default:
+      router.push('/staff-workorder-list')
+  }
 }
 
 const viewMemberDetail = (member) => {
@@ -1131,9 +1528,15 @@ onMounted(() => {
 
   // 加载打卡记录
   loadCheckinRecords()
-  
+
   // 加载工单数据
   loadWorkorders()
+
+  // 恢复上次离开时的Tab状态
+  const savedTab = sessionStorage.getItem('workspace_activeTab')
+  if (savedTab) {
+    activeTab.value = savedTab
+  }
 
   // 监听打卡更新事件
   window.addEventListener('checkin-updated', handleCheckinUpdate)
@@ -2139,5 +2542,78 @@ const handleWindowFocus = () => {
   height: 18px;
   line-height: 18px;
   padding: 0 6px;
+}
+
+/* 分配工程师对话框 */
+.assign-mobile-dialog .assign-dialog-content {
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+.assign-info-section {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.assign-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
+}
+.assign-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.assign-info-row .label {
+  color: #909399;
+  white-space: nowrap;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+.assign-info-row .value {
+  color: #303133;
+  word-break: break-all;
+}
+.assign-info-pair {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+.assign-info-pair .assign-info-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex: 1;
+}
+.assign-info-pair .assign-info-item .label {
+  color: #909399;
+  white-space: nowrap;
+  min-width: 50px;
+}
+.assign-info-pair .assign-info-item .value {
+  color: #303133;
+  word-break: break-all;
+}
+.assign-info-desc {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.assign-info-desc .label {
+  color: #909399;
+  display: block;
+  margin-bottom: 4px;
+}
+.assign-info-desc .value {
+  color: #303133;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

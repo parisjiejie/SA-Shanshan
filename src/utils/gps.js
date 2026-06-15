@@ -44,9 +44,9 @@ export function getCurrentPosition() {
         })
       },
       {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 300000
       }
     )
   })

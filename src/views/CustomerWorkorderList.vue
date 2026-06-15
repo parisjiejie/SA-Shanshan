@@ -364,6 +364,7 @@ const createWorkorder = () => {
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .status-tabs::-webkit-scrollbar {

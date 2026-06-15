@@ -91,7 +91,7 @@
           <div class="action-buttons">
             <!-- 待分配：课长分配 + 创建人可编辑删除 -->
             <template v-if="order.status === 'pending_assign'">
-              <el-button v-if="canAssignWorkorder(currentUserRole, order)" type="primary" size="small" @click.stop="goToAssign(order)">分配</el-button>
+              <el-button v-if="canAssignWorkorder(currentUserRole, order)" type="primary" size="small" @click.stop="openAssignDialog(order)">分配</el-button>
               <el-button v-if="canEditForMobile(order)" type="success" size="small" @click.stop="handleEditWorkorder(order)">编辑</el-button>
               <el-button v-if="canEditForMobile(order)" type="danger" size="small" @click.stop="handleDeleteWorkorder(order)">删除</el-button>
             </template>
@@ -100,7 +100,8 @@
               <el-button v-if="canAcceptWorkorder(currentUserRole, order, currentUserId)" type="primary" size="small" @click.stop="acceptWorkorder(order)">接单</el-button>
               <el-button v-if="canRejectWorkorder(currentUserRole, order, currentUserId)" type="warning" size="small" @click.stop="rejectOrder(order)">弃单</el-button>
             </template>
-            <!-- 进行中：工程师处理（仅进行中状态显示） -->
+            <!-- 进行中：工程师打卡+处理 -->
+            <el-button v-if="order.status === 'processing' && canSubmitForSign(currentUserRole, order, currentUserId)" type="primary" size="small" :disabled="hasCheckedIn(order)" @click.stop="goToCheckInFromWorkorder(order)">{{ hasCheckedIn(order) ? '已打卡' : '打卡' }}</el-button>
             <el-button v-if="order.status === 'processing' && canSubmitForSign(currentUserRole, order, currentUserId)" type="success" size="small" @click.stop="goToProcess(order)">处理</el-button>
             <!-- 待签字：工程师操作签字（仅待签字状态显示） -->
             <el-button v-if="order.status === 'pending_sign' && canSignWorkorder(currentUserRole, order, currentUserId)" type="warning" size="small" @click.stop="goToSign(order)">签字</el-button>
@@ -119,6 +120,99 @@
         <p v-if="searchKeyword || hasActiveFilters" class="empty-tip">请尝试调整搜索条件</p>
       </div>
     </div>
+
+    <!-- 分配工程师对话框 -->
+    <el-dialog
+      v-model="assignDialogVisible"
+      title="分配工程师"
+      width="95%"
+      :show-close="false"
+      class="mobile-dialog assign-mobile-dialog"
+      :fullscreen="true"
+    >
+      <template #header>
+        <div class="repair-dialog-header">
+          <span class="repair-title">分配工程师</span>
+          <el-button link @click="assignDialogVisible = false">
+            <el-icon><Close /></el-icon>
+          </el-button>
+        </div>
+      </template>
+      <div v-if="assignWorkorderData" class="assign-dialog-content">
+        <!-- 工单基础信息 -->
+        <div class="assign-info-section">
+          <div class="assign-section-title">工单信息</div>
+          <div class="assign-info-row"><span class="label">工单号</span><span class="value">{{ assignWorkorderData.workorderId }}</span></div>
+          <div class="assign-info-row"><span class="label">工单类型</span><span class="value">{{ getCategoryText(assignWorkorderData.category) }}{{ assignWorkorderData.subType ? '·' + getSubTypeText(assignWorkorderData.subType) : '' }}</span></div>
+          <div class="assign-info-row"><span class="label">客户公司</span><span class="value">{{ assignWorkorderData.customerName }}</span></div>
+          <div class="assign-info-row"><span class="label">联系电话</span><span class="value">{{ assignWorkorderData.customerPhone }}</span></div>
+          <div class="assign-info-row"><span class="label">地址</span><span class="value">{{ assignWorkorderData.address }}</span></div>
+          <div class="assign-info-pair">
+            <div class="assign-info-item"><span class="label">设备型号</span><span class="value">{{ assignWorkorderData.deviceModel || '-' }}</span></div>
+            <div class="assign-info-item"><span class="label">序列号</span><span class="value">{{ assignWorkorderData.serialNumber || '-' }}</span></div>
+          </div>
+          <div class="assign-info-row"><span class="label">保修状态</span><span class="value"><el-tag :type="getWarrantyTagType(assignWorkorderData.warrantyStatus)" size="small">{{ getWarrantyText(assignWorkorderData.warrantyStatus) }}</el-tag></span></div>
+          <div class="assign-info-desc"><span class="label">故障描述</span><div class="value">{{ assignWorkorderData.faultDescription }}</div></div>
+        </div>
+
+        <el-divider />
+
+        <el-form label-position="top">
+          <el-form-item label="选择工程师" required>
+            <el-select
+              v-model="assignFormData.selectedEngineerIds"
+              multiple
+              placeholder="请选择工程师（可多选）"
+              style="width: 100%"
+              filterable
+            >
+              <el-option
+                v-for="eng in engineerList"
+                :key="eng.id"
+                :label="`${eng.name}（${eng.department}·${eng.specialty}）`"
+                :value="eng.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="工作内容">
+            <el-input v-model="assignFormData.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+          </el-form-item>
+          <el-form-item label="工作开始时间">
+            <el-date-picker
+              v-model="assignFormData.workStartTime"
+              type="datetime"
+              placeholder="选择开始时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="预定完成时间">
+            <el-date-picker
+              v-model="assignFormData.workEndTime"
+              type="datetime"
+              placeholder="选择完成时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="使用车辆">
+            <el-radio-group v-model="assignFormData.vehicle">
+              <el-radio label="self">自备</el-radio>
+              <el-radio label="company">公司车辆</el-radio>
+              <el-radio label="public">公共交通</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <div class="repair-footer">
+          <el-button size="large" @click="assignDialogVisible = false">取消</el-button>
+          <el-button type="primary" size="large" @click="confirmAssign" :disabled="assignFormData.selectedEngineerIds.length === 0">确认分配</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <!-- 筛选对话框 -->
     <el-dialog
@@ -175,10 +269,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { state as workorderFlowState, WorkorderStatusText, WorkorderStatusType, acceptWorkorder as storeAccept, rejectWorkorder as storeReject, techLeadConfirm as storeTechLeadConfirm, assistantConfirm as storeAssistantConfirm, getVisibleWorkorders, canAcceptWorkorder, canRejectWorkorder, canSubmitForSign, canSignWorkorder, canTechLeadConfirm, canAssistantConfirm, canAssignWorkorder } from '../stores/workorderFlowStore.js'
+import { state as workorderFlowState, WorkorderStatusText, WorkorderStatusType, acceptWorkorder as storeAccept, rejectWorkorder as storeReject, techLeadConfirm as storeTechLeadConfirm, assistantConfirm as storeAssistantConfirm, getVisibleWorkorders, canAcceptWorkorder, canRejectWorkorder, canSubmitForSign, canSignWorkorder, canTechLeadConfirm, canAssistantConfirm, canAssignWorkorder, engineerList, assignWorkorder } from '../stores/workorderFlowStore.js'
 import {
   ArrowLeft,
   Monitor,
@@ -187,7 +281,8 @@ import {
   OfficeBuilding,
   Search,
   CircleClose,
-  Filter
+  Filter,
+  Close
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -295,8 +390,12 @@ onMounted(() => {
   // 加载工单数据
   loadWorkorders()
 
+  // 恢复上次离开时的Tab状态（优先于query.filter）
+  const savedTab = sessionStorage.getItem('workorderList_activeTab')
   const filter = route.query.filter
-  if (filter && ['all', 'pending_accept', 'processing', 'pending_sign', 'techlead_confirm', 'completed'].includes(filter)) {
+  if (savedTab) {
+    activeTab.value = savedTab
+  } else if (filter && ['all', 'pending_assign', 'pending_accept', 'processing', 'pending_sign', 'techlead_confirm', 'assistant_confirm', 'completed'].includes(filter)) {
     activeTab.value = filter
   }
 
@@ -309,21 +408,37 @@ const loadWorkorders = () => {
   workorders.value = [...workorderFlowState.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 }
 
-// 状态标签（展示全部7个流程节点）
-const statusTabs = computed(() => [
-  { key: 'all', name: '全部', count: workorders.value.length },
-  { key: 'pending_assign', name: '待分配', count: workorders.value.filter(w => w.status === 'pending_assign').length },
-  { key: 'pending_accept', name: '待接单', count: workorders.value.filter(w => w.status === 'pending_accept').length },
-  { key: 'processing', name: '进行中', count: workorders.value.filter(w => w.status === 'processing').length },
-  { key: 'pending_sign', name: '待签字', count: workorders.value.filter(w => w.status === 'pending_sign').length },
-  { key: 'techlead_confirm', name: '课长确认', count: workorders.value.filter(w => w.status === 'techlead_confirm').length },
-  { key: 'assistant_confirm', name: '业务确认', count: workorders.value.filter(w => w.status === 'assistant_confirm').length },
-  { key: 'completed', name: '已完成', count: workorders.value.filter(w => w.status === 'completed').length }
-])
+// 状态标签（根据角色动态生成，工程师不展示"待分配"）
+const showPendingAssignTab = computed(() => {
+  return ['admin', 'assistant', 'techLead', 'director'].includes(currentUserRole.value)
+})
+
+const statusTabs = computed(() => {
+  const tabs = [
+    { key: 'all', name: '全部', count: workorders.value.length },
+  ]
+  if (showPendingAssignTab.value) {
+    tabs.push({ key: 'pending_assign', name: '待分配', count: workorders.value.filter(w => w.status === 'pending_assign').length })
+  }
+  tabs.push(
+    { key: 'pending_accept', name: '待接单', count: workorders.value.filter(w => w.status === 'pending_accept').length },
+    { key: 'processing', name: '进行中', count: workorders.value.filter(w => w.status === 'processing').length },
+    { key: 'pending_sign', name: '待签字', count: workorders.value.filter(w => w.status === 'pending_sign').length },
+    { key: 'techlead_confirm', name: '课长确认', count: workorders.value.filter(w => w.status === 'techlead_confirm').length },
+    { key: 'assistant_confirm', name: '业务确认', count: workorders.value.filter(w => w.status === 'assistant_confirm').length },
+    { key: 'completed', name: '已完成', count: workorders.value.filter(w => w.status === 'completed').length }
+  )
+  return tabs
+})
 
 // 筛选后的工单
 const filteredWorkorders = computed(() => {
   let result = workorders.value
+
+  // 0. 工程师在"全部"视图中不展示待分配工单
+  if (currentUserRole.value === 'engineer') {
+    result = result.filter(order => order.status !== 'pending_assign')
+  }
 
   // 1. 按状态标签筛选
   if (activeTab.value !== 'all') {
@@ -412,10 +527,12 @@ const filteredWorkorders = computed(() => {
 
 // 方法
 const goBack = () => {
-  router.push('/staff-mobile-workspace')
+  router.back()
 }
 
 const viewWorkorderDetail = (order) => {
+  // 保存当前Tab状态到sessionStorage，返回时恢复
+  sessionStorage.setItem('workorderList_activeTab', activeTab.value)
   router.push(`/staff-workorder-detail?id=${order.id}`)
 }
 
@@ -439,16 +556,95 @@ const goToProcess = (order) => {
   router.push(`/staff-workorder-detail?id=${order.id}&action=process`)
 }
 
+// 判断工单是否已打卡签到
+const hasCheckedIn = (order) => {
+  try {
+    const records = JSON.parse(localStorage.getItem('checkinRecords') || '[]')
+    const wid = order.workorderId || order.id
+    return records.some(r => r.workorderId === wid && r.status === '已签到')
+  } catch { return false }
+}
+
+const goToCheckInFromWorkorder = (order) => {
+  router.push({
+    path: '/staff-checkin',
+    query: {
+      from: 'workorder',
+      workorderId: order.workorderId || order.id,
+      customerName: order.customerName || ''
+    }
+  })
+}
+
 const completeWorkorder = (order) => {
   router.push(`/staff-workorder-detail?id=${order.id}&action=complete`)
 }
 
-const goToSign = (order) => {
-  router.push(`/staff-workorder-detail?id=${order.id}&action=sign`)
+// 分配工程师对话框
+const assignDialogVisible = ref(false)
+const assignWorkorderData = ref(null)
+const assignFormData = reactive({
+  selectedEngineerIds: [],
+  workContent: '',
+  workStartTime: null,
+  workEndTime: null,
+  vehicle: 'self'
+})
+
+const getCategoryText = (cat) => {
+  const map = { installation: '安装工单', service: '服务工单' }
+  return map[cat] || cat
+}
+const getSubTypeText = (sub) => {
+  const map = { repair: '维修', trial_processing: '试加工', refitting: '改造' }
+  return map[sub] || sub
+}
+const getWarrantyText = (ws) => {
+  const map = { in_warranty: '保内', out_of_warranty: '保外', expired: '过保', in: '保内', out: '保外', unknown: '未知' }
+  return map[ws] || ws
+}
+const getWarrantyTagType = (ws) => {
+  const map = { in_warranty: 'success', out_of_warranty: 'warning', expired: 'danger', in: 'success', out: 'danger', unknown: 'info' }
+  return map[ws] || 'info'
 }
 
-const goToAssign = (order) => {
-  router.push(`/staff-workorder-detail?id=${order.id}&action=assign`)
+const openAssignDialog = (order) => {
+  const fullWo = workorderFlowState.workorders.find(w => w.id === (order.id || order.rawId))
+  assignWorkorderData.value = fullWo || order
+  assignFormData.selectedEngineerIds = []
+  assignFormData.workContent = ''
+  assignFormData.workStartTime = null
+  assignFormData.workEndTime = null
+  assignFormData.vehicle = 'self'
+  assignDialogVisible.value = true
+}
+
+const confirmAssign = () => {
+  if (assignFormData.selectedEngineerIds.length === 0) {
+    ElMessage.warning('请选择工程师')
+    return
+  }
+  const primaryEng = engineerList.find(e => e.id === assignFormData.selectedEngineerIds[0])
+  if (!primaryEng) return
+  const selectedEngineers = assignFormData.selectedEngineerIds.map(id => {
+    const eng = engineerList.find(e => e.id === id)
+    return eng ? { id: eng.id, name: eng.name, phone: eng.phone } : null
+  }).filter(Boolean)
+
+  assignWorkorder(assignWorkorderData.value.id || assignWorkorderData.value.rawId, primaryEng.id, primaryEng.name, primaryEng.phone, {
+    engineers: selectedEngineers,
+    workContent: assignFormData.workContent,
+    workStartTime: assignFormData.workStartTime || '',
+    workEndTime: assignFormData.workEndTime || '',
+    vehicle: assignFormData.vehicle
+  })
+  ElMessage.success(`已分配给 ${primaryEng.name}${selectedEngineers.length > 1 ? ` 等${selectedEngineers.length}人` : ''}`)
+  assignDialogVisible.value = false
+  loadWorkorders()
+}
+
+const goToSign = (order) => {
+  router.push(`/staff-workorder-detail?id=${order.id}&action=sign`)
 }
 
 const techLeadConfirmMobile = (order) => {
@@ -860,5 +1056,97 @@ const clearAllFilters = () => {
     border-left: 1px solid #e8e8e8;
     border-right: 1px solid #e8e8e8;
   }
+}
+
+/* 分配工程师对话框 */
+.assign-mobile-dialog .assign-dialog-content {
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+}
+.assign-info-section {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.assign-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
+}
+.assign-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.assign-info-row .label {
+  color: #909399;
+  white-space: nowrap;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+.assign-info-row .value {
+  color: #303133;
+  word-break: break-all;
+}
+.assign-info-pair {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+.assign-info-pair .assign-info-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  flex: 1;
+}
+.assign-info-pair .assign-info-item .label {
+  color: #909399;
+  white-space: nowrap;
+  min-width: 50px;
+}
+.assign-info-pair .assign-info-item .value {
+  color: #303133;
+  word-break: break-all;
+}
+.assign-info-desc {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.assign-info-desc .label {
+  color: #909399;
+  display: block;
+  margin-bottom: 4px;
+}
+.assign-info-desc .value {
+  color: #303133;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.repair-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+}
+.repair-title {
+  font-size: 18px;
+  font-weight: 500;
+  color: #262626;
+}
+.repair-footer {
+  display: flex;
+  gap: 15px;
+  width: 100%;
+}
+.repair-footer .el-button {
+  flex: 1;
 }
 </style>

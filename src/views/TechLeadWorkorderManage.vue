@@ -114,65 +114,79 @@
       class="mobile-dialog"
     >
       <div v-if="assignDialog.workorder" class="assign-dialog-content">
-        <div class="workorder-info">
-          <p><strong>工单号：</strong>{{ assignDialog.workorder.workorderId }}</p>
-          <p><strong>客户：</strong>{{ assignDialog.workorder.customerName }}</p>
-          <p><strong>设备：</strong>{{ assignDialog.workorder.deviceModel || '未指定' }}</p>
+        <!-- 工单基础信息 -->
+        <div class="assign-info-section">
+          <div class="assign-section-title">工单信息</div>
+          <div class="assign-info-row"><span class="label">工单号</span><span class="value">{{ assignDialog.workorder.workorderId }}</span></div>
+          <div class="assign-info-row"><span class="label">工单类型</span><span class="value">{{ getCategoryText(assignDialog.workorder.category) }}{{ assignDialog.workorder.subType ? '·' + getSubTypeText(assignDialog.workorder.subType) : '' }}</span></div>
+          <div class="assign-info-row"><span class="label">客户公司</span><span class="value">{{ assignDialog.workorder.customerName }}</span></div>
+          <div class="assign-info-row"><span class="label">联系电话</span><span class="value">{{ assignDialog.workorder.customerPhone }}</span></div>
+          <div class="assign-info-row"><span class="label">地址</span><span class="value">{{ assignDialog.workorder.address }}</span></div>
+          <div class="assign-info-pair">
+            <div class="assign-info-item"><span class="label">设备型号</span><span class="value">{{ assignDialog.workorder.deviceModel || '-' }}</span></div>
+            <div class="assign-info-item"><span class="label">序列号</span><span class="value">{{ assignDialog.workorder.serialNumber || '-' }}</span></div>
+          </div>
+          <div class="assign-info-row"><span class="label">保修状态</span><span class="value"><el-tag :type="getWarrantyTagType(assignDialog.workorder.warrantyStatus)" size="small">{{ getWarrantyText(assignDialog.workorder.warrantyStatus) }}</el-tag></span></div>
+          <div class="assign-info-desc"><span class="label">故障描述</span><div class="value">{{ assignDialog.workorder.faultDescription }}</div></div>
         </div>
 
         <el-divider />
 
-        <div class="engineer-list">
-          <div class="section-title">选择工程师</div>
-          <div
-            v-for="engineer in engineers"
-            :key="engineer.id"
-            class="engineer-item"
-            :class="{ selected: assignDialog.selectedEngineer?.id === engineer.id }"
-            @click="selectEngineer(engineer)"
-          >
-            <el-avatar :size="40" :icon="UserFilled" />
-            <div class="engineer-info">
-              <span class="name">{{ engineer.name }}</span>
-              <span class="phone">{{ engineer.phone }}</span>
-              <span class="status" :class="engineer.status">
-                {{ engineer.status === 'available' ? '空闲' : '忙碌' }}
-              </span>
-            </div>
-            <el-icon v-if="assignDialog.selectedEngineer?.id === engineer.id" class="check-icon">
-              <Check />
-            </el-icon>
-          </div>
-        </div>
-
-        <div class="visit-time">
-          <div class="section-title">预约上门时间</div>
-          <el-date-picker
-            v-model="assignDialog.visitTime"
-            type="datetime"
-            placeholder="选择上门时间"
-            format="YYYY-MM-DD HH:mm"
-            value-format="YYYY-MM-DDTHH:mm:ss"
-            style="width: 100%"
-          />
-        </div>
-
-        <div class="remark">
-          <div class="section-title">备注（选填）</div>
-          <el-input
-            v-model="assignDialog.remark"
-            type="textarea"
-            :rows="3"
-            placeholder="输入备注信息..."
-          />
-        </div>
+        <el-form label-position="top">
+          <el-form-item label="选择工程师" required>
+            <el-select
+              v-model="assignDialog.selectedEngineerIds"
+              multiple
+              placeholder="请选择工程师（可多选）"
+              style="width: 100%"
+              filterable
+            >
+              <el-option
+                v-for="eng in engineers"
+                :key="eng.id"
+                :label="`${eng.name}（${eng.department || ''}·${eng.specialty || ''}）`"
+                :value="eng.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="工作内容">
+            <el-input v-model="assignDialog.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+          </el-form-item>
+          <el-form-item label="工作开始时间">
+            <el-date-picker
+              v-model="assignDialog.workStartTime"
+              type="datetime"
+              placeholder="选择开始时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="预定完成时间">
+            <el-date-picker
+              v-model="assignDialog.workEndTime"
+              type="datetime"
+              placeholder="选择完成时间"
+              format="YYYY-MM-DD HH:mm"
+              value-format="YYYY-MM-DDTHH:mm:ss"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="使用车辆">
+            <el-radio-group v-model="assignDialog.vehicle">
+              <el-radio label="self">自备</el-radio>
+              <el-radio label="company">公司车辆</el-radio>
+              <el-radio label="public">公共交通</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
       </div>
 
       <template #footer>
         <el-button @click="assignDialog.visible = false">取消</el-button>
-        <el-button 
-          type="primary" 
-          :disabled="!assignDialog.selectedEngineer"
+        <el-button
+          type="primary"
+          :disabled="assignDialog.selectedEngineerIds.length === 0"
           @click="confirmAssign"
         >
           确认分配
@@ -240,7 +254,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -259,7 +273,9 @@ import {
   getTechLeadPendingWorkorders,
   assignWorkorder,
   initiateQuotation,
-  WorkorderStatusText
+  WorkorderStatusText,
+  engineerList,
+  state as workorderFlowState
 } from '../stores/workorderFlowStore.js'
 
 const router = useRouter()
@@ -267,21 +283,18 @@ const router = useRouter()
 // 待分配工单列表
 const pendingWorkorders = ref([])
 
-// 工程师列表（模拟数据）
-const engineers = ref([
-  { id: 'eng001', name: '李工程师', phone: '13800138001', status: 'available' },
-  { id: 'eng002', name: '王工程师', phone: '13800138002', status: 'available' },
-  { id: 'eng003', name: '张工程师', phone: '13800138003', status: 'busy' },
-  { id: 'eng004', name: '刘工程师', phone: '13800138004', status: 'available' },
-])
+// 工程师列表
+const engineers = ref(engineerList)
 
 // 分配对话框
-const assignDialog = ref({
+const assignDialog = reactive({
   visible: false,
   workorder: null,
-  selectedEngineer: null,
-  visitTime: '',
-  remark: ''
+  selectedEngineerIds: [],
+  workContent: '',
+  workStartTime: null,
+  workEndTime: null,
+  vehicle: 'self'
 })
 
 // 报价对话框
@@ -333,46 +346,58 @@ const formatDateTime = (dateStr) => {
   return `${date.getMonth() + 1}月${date.getDate()}日 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
-// 打开分配对话框
-const openAssignDialog = (workorder) => {
-  assignDialog.value = {
-    visible: true,
-    workorder,
-    selectedEngineer: null,
-    visitTime: '',
-    remark: ''
-  }
+const getCategoryText = (cat) => {
+  const map = { installation: '安装工单', service: '服务工单' }
+  return map[cat] || cat
+}
+const getSubTypeText = (sub) => {
+  const map = { repair: '维修', trial_processing: '试加工', refitting: '改造' }
+  return map[sub] || sub
+}
+const getWarrantyText = (ws) => {
+  const map = { in_warranty: '保内', out_of_warranty: '保外', expired: '过保', in: '保内', out: '保外', unknown: '未知' }
+  return map[ws] || ws
+}
+const getWarrantyTagType = (ws) => {
+  const map = { in_warranty: 'success', out_of_warranty: 'warning', expired: 'danger', in: 'success', out: 'danger', unknown: 'info' }
+  return map[ws] || 'info'
 }
 
-// 选择工程师
-const selectEngineer = (engineer) => {
-  assignDialog.value.selectedEngineer = engineer
+// 打开分配对话框
+const openAssignDialog = (workorder) => {
+  const fullWo = workorderFlowState.workorders.find(w => w.id === workorder.id)
+  assignDialog.workorder = fullWo || workorder
+  assignDialog.selectedEngineerIds = []
+  assignDialog.workContent = ''
+  assignDialog.workStartTime = null
+  assignDialog.workEndTime = null
+  assignDialog.vehicle = 'self'
+  assignDialog.visible = true
 }
 
 // 确认分配
 const confirmAssign = () => {
-  const { workorder, selectedEngineer, visitTime, remark } = assignDialog.value
-  
-  if (!selectedEngineer) {
+  if (assignDialog.selectedEngineerIds.length === 0) {
     ElMessage.warning('请选择工程师')
     return
   }
+  const primaryEng = engineers.value.find(e => e.id === assignDialog.selectedEngineerIds[0])
+  if (!primaryEng) return
+  const selectedEngineers = assignDialog.selectedEngineerIds.map(id => {
+    const eng = engineers.value.find(e => e.id === id)
+    return eng ? { id: eng.id, name: eng.name, phone: eng.phone } : null
+  }).filter(Boolean)
 
-  // 调用 store 分配工单
-  const result = assignWorkorder(
-    workorder.id,
-    selectedEngineer.id,
-    selectedEngineer.name,
-    selectedEngineer.phone
-  )
-
-  if (result) {
-    ElMessage.success(`工单已分配给 ${selectedEngineer.name}`)
-    assignDialog.value.visible = false
-    loadPendingWorkorders()
-  } else {
-    ElMessage.error('分配失败，请重试')
-  }
+  assignWorkorder(assignDialog.workorder.id, primaryEng.id, primaryEng.name, primaryEng.phone, {
+    engineers: selectedEngineers,
+    workContent: assignDialog.workContent,
+    workStartTime: assignDialog.workStartTime || '',
+    workEndTime: assignDialog.workEndTime || '',
+    vehicle: assignDialog.vehicle
+  })
+  ElMessage.success(`已分配给 ${primaryEng.name}${selectedEngineers.length > 1 ? ` 等${selectedEngineers.length}人` : ''}`)
+  assignDialog.visible = false
+  loadPendingWorkorders()
 }
 
 // 打开报价对话框
@@ -630,7 +655,12 @@ onUnmounted(() => {
 }
 
 /* 对话框样式 */
-.assign-dialog-content,
+.assign-dialog-content {
+  max-height: 65vh;
+  overflow-y: auto;
+  padding: 10px 0;
+}
+
 .quotation-dialog-content {
   padding: 10px 0;
 }
@@ -654,74 +684,69 @@ onUnmounted(() => {
   margin-bottom: 12px;
 }
 
-.engineer-list {
-  margin-bottom: 20px;
+.assign-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 10px;
+  padding-left: 8px;
+  border-left: 3px solid #409eff;
 }
 
-.engineer-item {
+.assign-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.assign-info-row .label {
+  color: #909399;
+  white-space: nowrap;
+  min-width: 56px;
+  flex-shrink: 0;
+}
+.assign-info-row .value {
+  color: #303133;
+  word-break: break-all;
+}
+.assign-info-pair {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+.assign-info-pair .assign-info-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #f5f7fa;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-  border: 2px solid transparent;
-}
-
-.engineer-item:hover {
-  background: #e6f7ff;
-}
-
-.engineer-item.selected {
-  border-color: #1890ff;
-  background: #e6f7ff;
-}
-
-.engineer-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.engineer-info .name {
-  font-size: 15px;
-  font-weight: 500;
-  color: #262626;
-}
-
-.engineer-info .phone {
+  gap: 6px;
   font-size: 13px;
-  color: #8c8c8c;
+  flex: 1;
+}
+.assign-info-pair .assign-info-item .label {
+  color: #909399;
+  white-space: nowrap;
+  min-width: 50px;
+}
+.assign-info-pair .assign-info-item .value {
+  color: #303133;
+  word-break: break-all;
+}
+.assign-info-desc {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.assign-info-desc .label {
+  color: #909399;
+  display: block;
+  margin-bottom: 4px;
+}
+.assign-info-desc .value {
+  color: #303133;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
-.engineer-info .status {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  width: fit-content;
-}
-
-.engineer-info .status.available {
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.engineer-info .status.busy {
-  background: #fff2f0;
-  color: #f5222d;
-}
-
-.check-icon {
-  color: #1890ff;
-  font-size: 20px;
-}
-
-.visit-time,
-.remark,
 .estimated-cost,
 .quotation-notice {
   margin-bottom: 20px;

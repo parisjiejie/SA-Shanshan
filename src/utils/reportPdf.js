@@ -11,6 +11,7 @@ import jsPDF from 'jspdf'
 export function buildReportHtml(workorder, signImage, signRole) {
   const d = new Date()
   const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const sr = workorder.serviceReport || {}
   
   return `<!DOCTYPE html>
 <html>
@@ -37,10 +38,9 @@ export function buildReportHtml(workorder, signImage, signRole) {
 <table>
   <tr><td class="label">发行日</td><td>${dateStr}</td><td class="label">报告书 No.</td><td>${workorder.workorderId || ''}</td></tr>
   <tr><td class="label">客户名称</td><td>${workorder.customerName || ''}</td><td class="label">TEL</td><td>${workorder.customerPhone || ''}</td></tr>
-  <tr><td class="label">FAX</td><td>${workorder.customerFax || ''}</td><td class="label">负责人</td><td>${workorder.customerContact || ''}</td></tr>
+  <tr><td class="label">负责人</td><td>${workorder.customerContact || ''}</td><td class="label">安装日期</td><td>${workorder.installDate || ''}</td></tr>
   <tr><td class="label">地址</td><td colspan="3">${workorder.address || ''}</td></tr>
   <tr><td class="label">机身编号</td><td>${workorder.serialNumber || ''}</td><td class="label">型号</td><td>${workorder.deviceModel || ''}</td></tr>
-  <tr><td class="label">安装日期</td><td colspan="3">${workorder.installDate || ''}</td></tr>
 </table>
 
 <table>
@@ -52,7 +52,7 @@ export function buildReportHtml(workorder, signImage, signRole) {
       <span class="checkbox">${workorder.category === 'service' && workorder.subType === 'trial_processing' ? '☑' : '□'}</span> 试加工<br>
       <span class="checkbox">${workorder.category === 'service' && workorder.subType === 'refitting' ? '☑' : '□'}</span> 改造
     </td>
-    <td class="col-2"><b>作业内容：</b><br>${workorder.serviceReport?.repairContent || workorder.faultDescription || ''}</td>
+    <td class="col-2"><b>作业内容：</b><br>${sr.workContent || workorder.faultDescription || ''}</td>
   </tr>
 </table>
 
@@ -63,20 +63,20 @@ export function buildReportHtml(workorder, signImage, signRole) {
 
 <table>
   <tr><td class="section-title" colspan="6">故障处理过程</td></tr>
-  <tr><td colspan="6" class="content-cell">${workorder.serviceReport?.repairContent || '（详见处理记录）'}</td></tr>
+  <tr><td colspan="6" class="content-cell">${sr.repairProcess || sr.repairContent || '（详见处理记录）'}</td></tr>
 </table>
 
 <table>
   <tr><td class="section-title" colspan="2">更换配件</td></tr>
-  ${(workorder.serviceReport?.replacedParts || []).length > 0 
-    ? `<tr><td colspan="2">${workorder.serviceReport.replacedParts.join('、')}</td></tr>`
+  ${(sr.replacedParts || []).length > 0 
+    ? `<tr><td colspan="2">${sr.replacedParts.join('、')}</td></tr>`
     : '<tr><td colspan="2">无</td></tr>'
   }
 </table>
 
 <table>
   <tr><td class="section-title" colspan="2">机床现状</td></tr>
-  <tr><td colspan="2">${workorder.serviceReport?.testResult || '已修复，可正常使用'}</td></tr>
+  <tr><td colspan="2">${sr.testResult || '已修复，可正常使用'}</td></tr>
 </table>
 
 <table>
@@ -84,25 +84,14 @@ export function buildReportHtml(workorder, signImage, signRole) {
   <tr>
     <td class="col-2">
       <b>服务人员确认</b><br><br>
-      ${signRole === 'engineer' || !signImage ? '' : `<img src="${signImage}" class="sign-img" alt="签字">`}
       ${signRole === 'engineer' && signImage ? `<img src="${signImage}" class="sign-img" alt="工程师签字">` : ''}
       <br>工程师：${workorder.engineerName || ''}
     </td>
     <td class="col-2">
       <b>客户确认</b><br><br>
       ${signRole === 'customer' && signImage ? `<img src="${signImage}" class="sign-img" alt="客户签字">` : ''}
-      ${signRole === 'engineer' || !signImage ? '' : `<img src="${signImage}" class="sign-img" alt="签字">`}
       <br>客户：${workorder.customerName || ''}
     </td>
-  </tr>
-</table>
-
-<table>
-  <tr><td class="section-title" colspan="4">客户评价</td></tr>
-  <tr>
-    <td>技术能力：□优秀 □一般 □较差</td>
-    <td>服务态度：□优良 □一般 □较差</td>
-    <td>及时性：□及时 □一般 □迟缓</td>
   </tr>
 </table>
 

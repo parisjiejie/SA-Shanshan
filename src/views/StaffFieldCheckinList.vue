@@ -96,6 +96,7 @@
           'unsubmitted': item.status === '已签到' && item.checkoutTime,
           'pending-approval': item.status === '已提交'
         }"
+        @click="openDetail(item)"
       >
         <div class="card-header">
           <div class="type-info">
@@ -114,116 +115,23 @@
             <el-icon><Document /></el-icon>
             <span class="workorder-id">{{ item.workorderId }}</span>
           </div>
-          <div class="info-row" v-if="item.workContent">
-            <span class="work-content">{{ item.workContent }}</span>
-          </div>
-          <div class="info-row" v-if="item.departTime || item.workStartTime">
-            <span class="trip-info">出发 {{ item.departTime || '-' }} | 作业开始 {{ item.workStartTime || '-' }}</span>
-          </div>
-          <div class="info-row tags-row" v-if="item.deviceStopped !== null && item.deviceStopped !== undefined">
-            <el-tag size="small" :type="item.deviceStopped ? 'danger' : 'success'">设备{{ item.deviceStopped ? '已' : '未' }}停机</el-tag>
-            <el-tag v-if="item.bizFollowUps && item.bizFollowUps.length" size="small" type="warning">业务跟进</el-tag>
-          </div>
-          <div class="info-row" v-if="item.pendingIssues">
-            <span class="pending">遗留: {{ item.pendingIssues }}</span>
-          </div>
           <div class="info-row">
             <el-icon><Location /></el-icon>
             <span class="location">{{ item.location }}</span>
           </div>
-          
-          <!-- 现场照片 -->
-          <div class="photo-list" v-if="item.photos && item.photos.length > 0">
-            <img 
-              v-for="(photo, index) in item.photos" 
-              :key="index" 
-              :src="photo" 
-              class="photo-thumb"
-              @click="previewPhoto(photo)"
-            />
-          </div>
-        </div>
-
-        <!-- 时间线（已签离显示） -->
-        <div class="timeline" v-if="item.checkoutTime">
-          <div class="timeline-item">
-            <div class="timeline-dot start"></div>
-            <div class="timeline-content">
-              <span class="time">{{ item.checkinTime }}</span>
-              <span class="label">签到</span>
-            </div>
-          </div>
-          <div class="timeline-item">
-            <div class="timeline-dot end"></div>
-            <div class="timeline-content">
-              <span class="time">{{ item.checkoutTime }}</span>
-              <span class="label">签离</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 签离详情 -->
-        <div class="checkout-details" v-if="item.checkoutTime">
-          <div class="detail-row" v-if="item.departTime"><span class="dl">出发时间</span><span class="dv">{{ item.departTime }}</span></div>
-          <div class="detail-row" v-if="item.workStartTime"><span class="dl">作业开始</span><span class="dv">{{ item.workStartTime }}</span></div>
-          <div class="detail-row" v-if="item.returnTime"><span class="dl">返程时间</span><span class="dv">{{ item.returnTime }}</span></div>
-          <div class="detail-row" v-if="item.workEndTime"><span class="dl">作业结束</span><span class="dv">{{ item.workEndTime }}</span></div>
-          <div class="detail-row" v-if="item.coworker"><span class="dl">共同作业</span><span class="dv">{{ item.coworker }}</span></div>
-          <div class="detail-row" v-if="item.deviceStopped !== null && item.deviceStopped !== undefined">
-            <span class="dl">设备停机</span>
-            <span class="dv" :class="{ 'text-danger': item.deviceStopped }">{{ item.deviceStopped ? '是' : '否' }}</span>
-          </div>
-          <div class="detail-row" v-if="item.workContent"><span class="dl">作业内容</span><span class="dv">{{ item.workContent }}</span></div>
-          <div class="detail-row" v-if="item.faultAnalysis"><span class="dl">故障分析</span><span class="dv">{{ item.faultAnalysis }}</span></div>
-          <div class="detail-row" v-if="item.bizFollowUps && item.bizFollowUps.length">
-            <span class="dl">业务跟进</span>
-            <span class="dv">{{ item.bizFollowUps.map(b => ({ quotation: '零部件报价', password: '密码申请', free_service: '无偿服务申请', other: '其他' }[b])).join('、') }}</span>
-          </div>
-          <div class="detail-row" v-if="item.pendingIssues"><span class="dl">遗留事项</span><span class="dv">{{ item.pendingIssues }}</span></div>
-          <div class="detail-row" v-if="item.taskCompleted !== null && item.taskCompleted !== undefined">
-            <span class="dl">任务完成</span>
-            <span class="dv" :class="{ 'text-danger': !item.taskCompleted }">{{ item.taskCompleted ? '是' : '否' }}</span>
-          </div>
-          <div class="detail-row" v-if="!item.taskCompleted && item.incompleteReason">
-            <span class="dl">未完成原因</span><span class="dv">{{ item.incompleteReason }}</span>
-          </div>
         </div>
 
         <div class="card-footer">
-          <!-- 进行中：可签离，已签离后可再次签离（覆盖上次签离时间） -->
+          <span class="view-detail-hint">点击查看详情</span>
           <template v-if="item.status === '已签到'">
-            <el-button 
-              type="warning" 
-              size="small"
-              @click="handleCheckOut(item)"
-            >
-              签离
-            </el-button>
-            <el-button 
-              v-if="item.checkoutTime" 
-              type="success" 
-              size="small"
-              @click="handleSubmitApproval(item)"
-            >
-              提交审批
-            </el-button>
+            <el-button size="small" type="warning" @click.stop="handleCheckOut(item)">签离</el-button>
+            <el-button v-if="item.checkoutTime" size="small" type="success" @click.stop="handleSubmitApproval(item)">提交审批</el-button>
           </template>
-          
-          <!-- 已提交状态：审批者显示审批按钮，其他人显示待审批标签 -->
           <template v-else-if="item.status === '已提交'">
-            <el-button 
-              v-if="isApprover" 
-              type="primary" 
-              size="small"
-              @click="handleApprove(item)"
-            >
-              审批
-            </el-button>
-            <el-tag v-else type="info">待审批</el-tag>
+            <el-button v-if="isApprover" size="small" type="primary" @click.stop="handleApprove(item)">审批</el-button>
+            <el-tag v-else type="info" size="small">待审批</el-tag>
           </template>
-          
-          <!-- 已通过显示状态 -->
-          <el-tag v-else-if="item.status === '已通过'" type="success">已通过</el-tag>
+          <el-tag v-else-if="item.status === '已通过'" type="success" size="small">已通过</el-tag>
         </div>
       </div>
 
@@ -242,6 +150,112 @@
         <span>打卡签到</span>
       </div>
     </div>
+
+    <!-- 打卡详情 Drawer -->
+    <el-drawer v-model="detailDrawer.visible" direction="btt" size="85%" :show-close="false">
+      <template #header>
+        <span class="drawer-title">打卡详情</span>
+      </template>
+      <div class="detail-content" v-if="detailDrawer.data">
+        <!-- 打卡基本信息 -->
+        <div class="detail-section">
+          <h5 class="section-title">打卡信息</h5>
+          <div class="detail-grid">
+            <div class="detail-item"><span class="detail-label">打卡类型</span><el-tag :type="detailDrawer.data.type === 'workorder' ? 'primary' : 'success'" size="small">{{ detailDrawer.data.type === 'workorder' ? '工单打卡' : '日常打卡' }}</el-tag></div>
+            <div class="detail-item"><span class="detail-label">状态</span><el-tag :type="getStatusType(detailDrawer.data.status)" size="small">{{ detailDrawer.data.status }}</el-tag></div>
+            <div class="detail-item"><span class="detail-label">工程师</span><span class="detail-value">{{ detailDrawer.data.engineerName || '-' }}</span></div>
+            <div class="detail-item"><span class="detail-label">客户名称</span><span class="detail-value">{{ detailDrawer.data.customerName || '-' }}</span></div>
+          </div>
+        </div>
+
+        <!-- 签到/签离时间线 -->
+        <div class="detail-section">
+          <h5 class="section-title">时间信息</h5>
+          <div class="detail-grid">
+            <div class="detail-item"><span class="detail-label">签到时间</span><span class="detail-value highlight">{{ detailDrawer.data.checkinTime || '-' }}</span></div>
+            <div class="detail-item"><span class="detail-label">签到地点</span><span class="detail-value">{{ detailDrawer.data.location || '-' }}</span></div>
+            <div class="detail-item"><span class="detail-label">签离时间</span><span class="detail-value" :class="{ missing: !detailDrawer.data.checkoutTime }">{{ detailDrawer.data.checkoutTime || '未签离' }}</span></div>
+            <div class="detail-item"><span class="detail-label">签离地点</span><span class="detail-value">{{ detailDrawer.data.checkOutLocation || '-' }}</span></div>
+          </div>
+        </div>
+
+        <!-- 签离日报（已签离后显示） -->
+        <div class="detail-section" v-if="detailDrawer.data.checkoutTime">
+          <h5 class="section-title">签离日报</h5>
+          <div class="detail-grid">
+            <div class="detail-item" v-if="detailDrawer.data.departTime"><span class="detail-label">出发时间</span><span class="detail-value">{{ detailDrawer.data.departTime }}</span></div>
+            <div class="detail-item" v-if="detailDrawer.data.workStartTime"><span class="detail-label">作业开始</span><span class="detail-value">{{ detailDrawer.data.workStartTime }}</span></div>
+            <div class="detail-item" v-if="detailDrawer.data.returnTime"><span class="detail-label">返程时间</span><span class="detail-value">{{ detailDrawer.data.returnTime }}</span></div>
+            <div class="detail-item" v-if="detailDrawer.data.workEndTime"><span class="detail-label">作业结束</span><span class="detail-value">{{ detailDrawer.data.workEndTime }}</span></div>
+            <div class="detail-item" v-if="detailDrawer.data.coworker"><span class="detail-label">共同作业</span><span class="detail-value">{{ detailDrawer.data.coworker }}</span></div>
+            <div class="detail-item" v-if="detailDrawer.data.deviceStopped !== null && detailDrawer.data.deviceStopped !== undefined">
+              <span class="detail-label">设备停机</span>
+              <span class="detail-value" :class="{ 'text-danger': detailDrawer.data.deviceStopped }">{{ detailDrawer.data.deviceStopped ? '是' : '否' }}</span>
+            </div>
+            <div class="detail-item full" v-if="detailDrawer.data.workContent"><span class="detail-label">作业内容</span><span class="detail-value">{{ detailDrawer.data.workContent }}</span></div>
+            <div class="detail-item full" v-if="detailDrawer.data.faultAnalysis"><span class="detail-label">故障分析</span><span class="detail-value">{{ detailDrawer.data.faultAnalysis }}</span></div>
+            <div class="detail-item" v-if="detailDrawer.data.bizFollowUps && detailDrawer.data.bizFollowUps.length">
+              <span class="detail-label">业务跟进</span>
+              <span class="detail-value">{{ detailDrawer.data.bizFollowUps.map(b => ({ quotation: '零部件报价', password: '密码申请', free_service: '无偿服务申请', other: '其他' }[b])).join('、') }}</span>
+            </div>
+            <div class="detail-item full" v-if="detailDrawer.data.pendingIssues"><span class="detail-label">遗留事项</span><span class="detail-value">{{ detailDrawer.data.pendingIssues }}</span></div>
+            <div class="detail-item" v-if="detailDrawer.data.taskCompleted !== null && detailDrawer.data.taskCompleted !== undefined">
+              <span class="detail-label">任务完成</span>
+              <span class="detail-value" :class="{ 'text-danger': !detailDrawer.data.taskCompleted }">{{ detailDrawer.data.taskCompleted ? '是' : '否' }}</span>
+            </div>
+            <div class="detail-item full" v-if="!detailDrawer.data.taskCompleted && detailDrawer.data.incompleteReason">
+              <span class="detail-label">未完成原因</span><span class="detail-value">{{ detailDrawer.data.incompleteReason }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 现场照片 -->
+        <div class="detail-section" v-if="detailDrawer.data.photos && detailDrawer.data.photos.length > 0">
+          <h5 class="section-title">现场照片</h5>
+          <div class="photo-list-detail">
+            <img v-for="(photo, index) in detailDrawer.data.photos" :key="index" :src="photo" class="photo-thumb-lg" @click="previewPhoto(photo)" />
+          </div>
+        </div>
+
+        <!-- 关联工单（工单打卡时显示） -->
+        <div class="detail-section" v-if="detailDrawer.data.workorderId && detailWorkorder">
+          <h5 class="section-title">关联工单</h5>
+          <div class="related-workorder" @click="goToWorkorderDetail(detailWorkorder)">
+            <div class="detail-grid">
+              <div class="detail-item"><span class="detail-label">工单号</span><span class="detail-value workorder-link">{{ detailWorkorder.workorderId || detailWorkorder.id }}</span></div>
+              <div class="detail-item"><span class="detail-label">工单状态</span><el-tag :type="getStatusType(detailWorkorder.status === 'processing' ? '' : 'info')" size="small">{{ getWorkorderStatusText(detailWorkorder.status) }}</el-tag></div>
+              <div class="detail-item"><span class="detail-label">客户名称</span><span class="detail-value">{{ detailWorkorder.customerName || '-' }}</span></div>
+              <div class="detail-item"><span class="detail-label">设备型号</span><span class="detail-value">{{ detailWorkorder.deviceModel || '-' }}</span></div>
+              <div class="detail-item"><span class="detail-label">序列号</span><span class="detail-value">{{ detailWorkorder.serialNumber || '-' }}</span></div>
+              <div class="detail-item"><span class="detail-label">保修状态</span><span class="detail-value">{{ { in_warranty: '保内', out_warranty: '保外', unknown: '未知' }[detailWorkorder.warrantyStatus] || '-' }}</span></div>
+              <div class="detail-item full" v-if="detailWorkorder.faultDescription"><span class="detail-label">故障描述</span><span class="detail-value">{{ detailWorkorder.faultDescription }}</span></div>
+              <div class="detail-item full" v-if="detailWorkorder.address"><span class="detail-label">客户地址</span><span class="detail-value">{{ detailWorkorder.address }}</span></div>
+            </div>
+            <div class="workorder-jump-hint">点击查看工单详情 →</div>
+          </div>
+        </div>
+        <div class="detail-section" v-else-if="detailDrawer.data.workorderId && !detailWorkorder">
+          <h5 class="section-title">关联工单</h5>
+          <div class="detail-grid">
+            <div class="detail-item"><span class="detail-label">工单号</span><span class="detail-value">{{ detailDrawer.data.workorderId }}</span></div>
+            <div class="detail-item"><span class="detail-label">设备型号</span><span class="detail-value">{{ detailDrawer.data.deviceModel || '-' }}</span></div>
+          </div>
+        </div>
+
+        <!-- 底部操作按钮 -->
+        <div class="detail-actions">
+          <template v-if="detailDrawer.data.status === '已签到'">
+            <el-button type="warning" size="large" round block @click="handleCheckOut(detailDrawer.data); detailDrawer.visible = false">签离</el-button>
+            <el-button v-if="detailDrawer.data.checkoutTime" type="success" size="large" round block @click="handleSubmitApproval(detailDrawer.data); detailDrawer.visible = false" style="margin-top:8px">提交审批</el-button>
+          </template>
+          <template v-else-if="detailDrawer.data.status === '已提交'">
+            <el-button v-if="isApprover" type="primary" size="large" round block @click="handleApprove(detailDrawer.data); detailDrawer.visible = false">审批</el-button>
+            <el-tag v-else type="info" size="large">待审批</el-tag>
+          </template>
+          <el-tag v-else-if="detailDrawer.data.status === '已通过'" type="success" size="large">已通过</el-tag>
+        </div>
+      </div>
+    </el-drawer>
 
     <!-- 签离/填写日报对话框 -->
     <el-dialog
@@ -290,7 +304,16 @@
           </div>
           <div class="form-item">
             <label class="form-label">共同作业人员</label>
-            <el-input v-model="checkOutDialog.form.coworker" placeholder="多人用逗号分隔" clearable />
+            <div class="coworker-select">
+              <el-tag
+                v-for="name in coworkerOptions"
+                :key="name"
+                class="coworker-tag"
+                :effect="checkOutDialog.form.coworker === name ? 'dark' : 'plain'"
+                :type="checkOutDialog.form.coworker === name ? 'primary' : 'info'"
+                @click="checkOutDialog.form.coworker = checkOutDialog.form.coworker === name ? '' : name"
+              >{{ name }}</el-tag>
+            </div>
           </div>
           <div class="form-item">
             <label class="form-label">客户设备是否停机？ <span class="required">*</span></label>
@@ -456,6 +479,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getCurrentPosition } from '../utils/gps'
 import { addNotification, NotificationType } from '../stores/notificationStore'
+import { state as workorderFlowState } from '../stores/workorderFlowStore.js'
 import {
   ArrowLeft,
   ArrowRight,
@@ -594,6 +618,9 @@ const checkOutDialog = ref({
   }
 })
 
+// 共同作业人员选项（演示环境5人）
+const coworkerOptions = ['王工程师', '陈工程师', '刘工程师', '赵工程师', '孙工程师']
+
 const canCheckOut = computed(() => {
   const f = checkOutDialog.value.form
   const type = checkOutDialog.value.data?.type
@@ -615,12 +642,40 @@ const approvalDialog = ref({
   comment: ''
 })
 
-// 是否可以提交签到
+// 打卡详情 Drawer
+const detailDrawer = ref({
+  visible: false,
+  data: null
+})
+
+// 关联工单数据
+const detailWorkorder = computed(() => {
+  if (!detailDrawer.value.data?.workorderId) return null
+  const wid = detailDrawer.value.data.workorderId
+  return workorderFlowState.workorders.find(w => w.workorderId === wid || w.id === wid) || null
+})
+
+const openDetail = (item) => {
+  detailDrawer.value.data = item
+  detailDrawer.value.visible = true
+}
+
+const getWorkorderStatusText = (s) => ({
+  pending_assign: '待分配', pending_accept: '待接单', processing: '进行中',
+  pending_sign: '待签字', techlead_confirm: '课长确认', assistant_confirm: '业务确认',
+  completed: '已完成'
+}[s] || s)
+
+const goToWorkorderDetail = (wo) => {
+  detailDrawer.value.visible = false
+  router.push(`/staff-workorder-detail?id=${wo.id}`)
+}
+
 // 方法
 const goBack = () => {
   // 返回前触发更新事件，确保工作台数据刷新
   window.dispatchEvent(new CustomEvent('checkin-updated'))
-  router.push('/staff-mobile-workspace')
+  router.back()
 }
 
 const changeDate = (days) => {
@@ -639,12 +694,12 @@ const goToCheckIn = () => {
   router.push('/staff-checkin')
 }
 
-const handleCheckOut = async (item) => {
+const handleCheckOut = (item) => {
   checkOutDialog.value.data = item
   const now = new Date()
   checkOutDialog.value.checkoutTime = now.toISOString().slice(0, 19).replace('T', ' ')
   checkOutDialog.value.form = {
-    location: '',
+    location: item.location || item.checkOutLocation || '定位中...',
     departTime: item.departTime || '', workStartTime: item.workStartTime || '',
     returnTime: '', workEndTime: '',
     coworker: item.coworker || '', deviceStopped: item.deviceStopped,
@@ -652,13 +707,13 @@ const handleCheckOut = async (item) => {
     bizFollowUps: item.bizFollowUps || [], pendingIssues: item.pendingIssues || '',
     taskCompleted: null, incompleteReason: ''
   }
-  try {
-    const pos = await getCurrentPosition()
-    checkOutDialog.value.form.location = pos.address
-  } catch {
-    checkOutDialog.value.form.location = item.location || item.checkOutLocation || '上海市浦东新区张江高科技园区'
-  }
+  // 先弹出对话框，定位在后台异步进行
   checkOutDialog.value.visible = true
+  getCurrentPosition().then(pos => {
+    checkOutDialog.value.form.location = pos.address
+  }).catch(() => {
+    checkOutDialog.value.form.location = item.location || item.checkOutLocation || '上海市浦东新区张江高科技园区'
+  })
 }
 
 const refreshCheckOutLocation = async () => {
@@ -1598,5 +1653,51 @@ const formatMonth = (date) => {
   border-radius: 6px;
   border: 1px solid #f0f0f0;
   cursor: pointer;
+}
+
+/* 卡片点击提示 */
+.checkin-card { cursor: pointer; transition: box-shadow 0.2s; }
+.checkin-card:active { box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+.view-detail-hint { font-size: 12px; color: #c0c4cc; flex: 1; }
+
+/* Drawer 详情 */
+.drawer-title { font-size: 17px; font-weight: 600; color: #303133; }
+.detail-content { padding: 0 4px 20px; }
+.detail-section { margin-bottom: 16px; background: #f9fafb; border-radius: 10px; padding: 14px; }
+.section-title { font-size: 14px; font-weight: 600; color: #303133; margin: 0 0 10px 0; padding-bottom: 6px; border-bottom: 1px solid #ebeef5; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.detail-item { display: flex; flex-direction: column; gap: 2px; }
+.detail-item.full { grid-column: 1 / -1; }
+.detail-label { font-size: 12px; color: #909399; }
+.detail-value { font-size: 13px; color: #303133; word-break: break-all; }
+.detail-value.highlight { color: #1890ff; font-weight: 600; }
+.detail-value.missing { color: #f5222d; font-style: italic; }
+.text-danger { color: #f56c6c !important; }
+
+/* 关联工单 */
+.related-workorder { cursor: pointer; }
+.related-workorder:active { opacity: 0.8; }
+.workorder-link { color: #1890ff; font-weight: 500; }
+.workorder-jump-hint { text-align: right; font-size: 12px; color: #1890ff; margin-top: 8px; }
+
+/* 现场照片 */
+.photo-list-detail { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo-thumb-lg { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #f0f0f0; cursor: pointer; }
+
+/* 底部操作 */
+.detail-actions { padding: 16px 0 0; }
+
+/* 共同作业人员选择 */
+.coworker-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.coworker-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.coworker-tag:hover {
+  opacity: 0.8;
 }
 </style>

@@ -166,7 +166,7 @@ const roles = [
     icon: 'User',
     color: '#67c23a',
     tagType: 'success',
-    redirect: '/staff-mobile-workspace'
+    redirect: '/dashboard'
   },
   {
     key: 'engineer',
@@ -188,7 +188,8 @@ const roles = [
     icon: 'Avatar',
     color: '#f56c6c',
     tagType: 'danger',
-    redirect: '/staff-mobile-workspace'
+    redirect: '/staff-mobile-workspace',
+    subDepartment: '工程课A'
   },
   {
     key: 'director',
@@ -235,10 +236,13 @@ const handleLogin = async () => {
     // 保存登录状态
     const displayName = role.mockName || role.name
     const userInfo = {
+      id: role.key === 'customer' ? 'C001' : (role.key === 'admin' ? 'admin_001' : role.account),
       username: role.account,
       name: displayName,
       role: role.key,
       roleName: role.name,
+      department: role.key === 'customer' ? '' : '技术服务部',
+      subDepartment: role.subDepartment || '',
       loginTime: new Date().toISOString()
     }
 
