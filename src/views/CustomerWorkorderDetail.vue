@@ -62,7 +62,7 @@
           <div class="timeline-content">
             <div class="timeline-title">{{ record.title }}</div>
             <div class="timeline-desc">{{ record.content }}</div>
-            <div class="timeline-time">{{ record.time }}</div>
+            <div class="timeline-time">{{ formatTime(record.time) }}</div>
           </div>
         </div>
         <div v-if="!workorder.processRecords || workorder.processRecords.length === 0" class="empty-timeline">
@@ -108,31 +108,27 @@
     </div>
 
     <!-- 服务报告 -->
-    <div class="info-section" v-if="workorder.report">
+    <div class="info-section" v-if="workorder.serviceReport">
       <h4 class="section-title">
         <el-icon><Document /></el-icon>
         <span>服务报告</span>
       </h4>
       <div class="report-card">
         <div class="report-item">
-          <span class="label">报告编号</span>
-          <span class="value">{{ workorder.report.reportNo }}</span>
+          <span class="label">作业内容</span>
+          <span class="value">{{ workorder.serviceReport.workContent || workorder.serviceReport.repairContent || '-' }}</span>
         </div>
         <div class="report-item">
-          <span class="label">服务日期</span>
-          <span class="value">{{ workorder.report.serviceDate }}</span>
+          <span class="label">处理过程</span>
+          <span class="value">{{ workorder.serviceReport.repairProcess || '-' }}</span>
         </div>
         <div class="report-item">
-          <span class="label">故障描述</span>
-          <span class="value">{{ workorder.report.faultDescription }}</span>
-        </div>
-        <div class="report-item">
-          <span class="label">解决方案</span>
-          <span class="value">{{ workorder.report.solution }}</span>
+          <span class="label">更换配件</span>
+          <span class="value">{{ (workorder.serviceReport.replacedParts || []).join('、') || '无' }}</span>
         </div>
         <div class="report-item">
           <span class="label">处理结果</span>
-          <el-tag type="success">{{ workorder.report.result }}</el-tag>
+          <span class="value">{{ workorder.serviceReport.testResult || '-' }}</span>
         </div>
       </div>
     </div>
@@ -263,6 +259,20 @@
         </el-button>
       </div>
     </div>
+
+    <!-- PDF预览对话框 -->
+    <el-dialog
+      v-model="pdfDialog.visible"
+      title="服务报告书"
+      width="95%"
+      fullscreen
+      @close="onPdfDialogClose"
+    >
+      <iframe v-if="pdfDialog.url" :src="pdfDialog.url" style="width:100%;height:70vh;border:none;"></iframe>
+      <div style="text-align:center;margin-top:15px;">
+        <el-button type="primary" @click="downloadPdf">下载PDF</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -285,7 +295,8 @@ import {
   Download,
   Check
 } from '@element-plus/icons-vue'
-import { getWorkorderById, getCustomerWorkorders, getPendingSurveysByCustomer, signWorkorder, submitSatisfactionSurvey, WorkorderStatusText, WorkorderStatusType } from '../stores/workorderFlowStore.js'
+import { getWorkorderById, getCustomerWorkorders, getPendingSurveysByCustomer, signWorkorder, submitSatisfactionSurvey, saveReportPdf, WorkorderStatusText, WorkorderStatusType } from '../stores/workorderFlowStore.js'
+import { generateReportPdf } from '../utils/reportPdf.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -297,15 +308,19 @@ const workorder = ref({
   type: 'service',
   deviceModel: '',
   assetSerialNumber: '',
+  serialNumber: '',
   faultDescription: '',
   description: '',
   status: 'processing',
   createTime: '',
   assignEngineer: '',
+  engineerName: '',
   engineerPhone: '',
+  customerName: '',
   isEvaluated: false,
   processRecords: [],
-  report: null
+  serviceReport: null,
+  reportPdf: null
 })
 
 // 签字对话框
@@ -357,6 +372,14 @@ const getStatusDesc = (status) => {
   return map[status] || ''
 }
 
+const formatTime = (timeStr) => {
+  if (!timeStr) return ''
+  const d = new Date(timeStr)
+  if (isNaN(d.getTime())) return timeStr
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 // 加载工单详情
 const loadWorkorderDetail = () => {
   const id = route.query.id
@@ -387,12 +410,15 @@ const loadWorkorderDetail = () => {
       type: 'service',
       deviceModel: storeWorkorder.deviceModel,
       assetSerialNumber: storeWorkorder.serialNumber,
+      serialNumber: storeWorkorder.serialNumber,
       faultDescription: storeWorkorder.faultDescription,
       description: storeWorkorder.faultDescription,
       status: storeWorkorder.status,
       createTime: storeWorkorder.createTime,
       assignEngineer: storeWorkorder.engineerName,
+      engineerName: storeWorkorder.engineerName,
       engineerPhone: storeWorkorder.engineerPhone,
+      customerName: storeWorkorder.customerName,
       isEvaluated: false,
       processRecords: storeWorkorder.processRecords?.map(r => ({
         time: r.time,
@@ -400,13 +426,8 @@ const loadWorkorderDetail = () => {
         content: r.content,
         operator: r.operator
       })) || [],
-      report: storeWorkorder.serviceReport ? {
-        reportNo: `SR${storeWorkorder.workorderId.slice(2)}`,
-        serviceDate: storeWorkorder.completeTime?.slice(0, 10) || '',
-        faultDescription: storeWorkorder.faultDescription,
-        solution: storeWorkorder.serviceReport.repairContent || '',
-        result: '已修复'
-      } : null
+      serviceReport: storeWorkorder.serviceReport,
+      reportPdf: storeWorkorder.reportPdf
     }
     console.log('加载工单详情:', workorder.value)
   } else {
@@ -494,9 +515,8 @@ const clearSign = () => {
 }
 
 // 提交签名
-const submitSign = () => {
+const submitSign = async () => {
   if (!signCanvas.value) return
-  // 检查是否已签名
   const imageData = ctx.getImageData(0, 0, signCanvas.value.width, signCanvas.value.height)
   const hasSignature = imageData.data.some((value, index) => index % 4 === 3 && value > 0)
   
@@ -505,15 +525,24 @@ const submitSign = () => {
     return
   }
   
-  // 保存签名图片
   const signImage = signCanvas.value.toDataURL('image/png')
   
+  try {
+    const pdfBase64 = await generateReportPdf(workorder.value, signImage, 'customer')
+    if (pdfBase64) {
+      saveReportPdf(workorder.value.id, pdfBase64)
+      workorder.value.reportPdf = pdfBase64
+    }
+  } catch (e) {
+    console.error('PDF生成失败:', e)
+  }
+
   // 调用 store 方法更新工单状态
   const result = signWorkorder(workorder.value.id, signImage)
   if (result) {
     ElMessage.success('签字确认成功')
     signDialog.visible = false
-    workorder.value.status = 'completed'
+    workorder.value.status = 'techlead_confirm'
   } else {
     ElMessage.error('签字失败，请重试')
   }
@@ -524,20 +553,47 @@ const viewQuotation = () => {
   ElMessage.info('查看报价功能开发中')
 }
 
-// PDF预览
+// PDF预览 - 使用 Blob URL 兼容手机浏览器
+const pdfDialog = reactive({ visible: false, url: '', _blobUrl: null })
+
+const dataUriToBlobUrl = (dataUri) => {
+  try {
+    const base64Match = dataUri.match(/^data:application\/pdf;base64,(.+)$/)
+    if (base64Match) {
+      const binaryStr = atob(base64Match[1])
+      const bytes = new Uint8Array(binaryStr.length)
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      return URL.createObjectURL(blob)
+    }
+  } catch (e) {
+    console.error('PDF Blob转换失败:', e)
+  }
+  return dataUri
+}
+
 const previewPdf = () => {
   if (!workorder.value.reportPdf) { ElMessage.warning('PDF不存在'); return }
-  const win = window.open('', '_blank')
-  if (win) win.document.write(`<iframe src="${workorder.value.reportPdf}" width="100%" height="100%" frameborder="0"></iframe>`)
-  else ElMessage.warning('请允许弹出窗口')
+  // 释放旧的 Blob URL
+  if (pdfDialog._blobUrl) { URL.revokeObjectURL(pdfDialog._blobUrl); pdfDialog._blobUrl = null }
+  const blobUrl = dataUriToBlobUrl(workorder.value.reportPdf)
+  pdfDialog.url = blobUrl
+  pdfDialog._blobUrl = blobUrl.startsWith('blob:') ? blobUrl : null
+  pdfDialog.visible = true
+}
+
+const onPdfDialogClose = () => {
+  if (pdfDialog._blobUrl) { URL.revokeObjectURL(pdfDialog._blobUrl); pdfDialog._blobUrl = null }
 }
 
 // PDF下载
 const downloadPdf = () => {
   if (!workorder.value.reportPdf) { ElMessage.warning('PDF不存在'); return }
+  const blobUrl = dataUriToBlobUrl(workorder.value.reportPdf)
   const link = document.createElement('a')
-  link.href = workorder.value.reportPdf
+  link.href = blobUrl
   link.download = `服务报告书_${workorder.value.workorderId || workorder.value.id}.pdf`
+  link.target = '_blank'
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)

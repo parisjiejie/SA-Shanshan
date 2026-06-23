@@ -175,6 +175,7 @@
 import { ref, reactive, watch } from 'vue'
 import { Camera, Edit, Document, List } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { allAssets, allQRCodes, getAssetBySerialNumber, getAssetByQRToken, boundQRCodes, unboundQRCodes, bindQRCode } from '../stores/assetStore'
 
 export default {
   name: 'Scan',
@@ -204,48 +205,8 @@ export default {
       serialNumber: [{ required: true, message: '请输入设备序列号', trigger: 'blur' }]
     }
     
-    // 模拟设备管理数据库
-    const deviceDatabase = [
-      {
-        serialNumber: 'SN001',
-        model: 'Model A',
-        customerName: '上海某机械有限公司',
-        status: '运行中',
-        manufactureDate: '2025-12-01',
-        saleDate: '2026-01-05',
-        warrantyEndDate: '2027-01-10',
-        isEL: true,
-        installAddress: '上海市浦东新区张江高科技园区',
-        contactPerson: '张经理',
-        contactPhone: '13800138001'
-      },
-      {
-        serialNumber: 'SN002',
-        model: 'Model B',
-        customerName: '北京某设备制造有限公司',
-        status: '运行中',
-        manufactureDate: '2025-11-15',
-        saleDate: '2026-01-10',
-        warrantyEndDate: '2027-01-15',
-        isEL: false,
-        installAddress: '北京市朝阳区建国路',
-        contactPerson: '李经理',
-        contactPhone: '13800138002'
-      },
-      {
-        serialNumber: 'SN003',
-        model: 'Model C',
-        customerName: '广州某工业设备有限公司',
-        status: '运行中',
-        manufactureDate: '2025-10-20',
-        saleDate: '2026-01-15',
-        warrantyEndDate: '2027-01-20',
-        isEL: true,
-        installAddress: '广州市天河区珠江新城',
-        contactPerson: '王经理',
-        contactPhone: '13800138003'
-      }
-    ]
+    // 从 assetStore 读取设备数据
+    const deviceDatabase = computed(() => allAssets.value)
     
     const repairForm = reactive({
       serialNumber: '',
@@ -254,22 +215,7 @@ export default {
       contactPerson: '',
       contactPhone: ''
     })
-    
-    // 模拟设备数据
-    const mockDeviceData = {
-      serialNumber: 'SN202403001',
-      model: 'Model-X2000',
-      manufactureDate: '2024-01-15',
-      saleDate: '2024-02-20',
-      warrantyEndDate: '2026-02-19',
-      status: '运行中',
-      isEL: true,
-      installAddress: '广州市天河区科技园路1号',
-      customerName: '广州某工厂',
-      contactPerson: '张经理',
-      contactPhone: '13800138000'
-    }
-    
+
     // 模拟维修记录
     const repairHistory = ref([
       {
@@ -310,36 +256,54 @@ export default {
     
     // 模拟扫码
     const simulateScan = () => {
-      // 实际项目中这里会调用摄像头扫码API
       setTimeout(() => {
-        // 模拟扫描到空白码（序列号为空的设备）
-        const isBlankCode = Math.random() > 0.7 // 30%概率模拟空白码
-        
-        if (isBlankCode) {
-          // 空白码，需要绑定动态码
+        // 从assetStore中随机选一个已绑定的二维码
+        const boundCodes = boundQRCodes.value
+        if (boundCodes.length > 0 && Math.random() > 0.3) {
+          // 70%概率：扫到已绑定的码，显示设备信息
+          const randomCode = boundCodes[Math.floor(Math.random() * boundCodes.length)]
+          const asset = getAssetByQRToken(randomCode.token)
+          if (asset) {
+            deviceInfo.value = asset
+            repairForm.serialNumber = asset.serialNumber
+            repairForm.contactPerson = asset.contactPerson || ''
+            repairForm.contactPhone = asset.contactPhone || ''
+            scanned.value = true
+            ElMessage.success('扫码成功')
+            return
+          }
+        }
+        // 30%概率：扫到空白码，需要绑定
+        const availableCodes = unboundQRCodes.value
+        if (availableCodes.length > 0) {
           showBindDialog.value = true
           scanned.value = true
           deviceInfo.value = null
           ElMessage.warning('检测到空白码，请先绑定设备信息')
         } else {
-          // 正常码，显示设备信息
-          deviceInfo.value = mockDeviceData
-          repairForm.serialNumber = mockDeviceData.serialNumber
-          repairForm.contactPerson = mockDeviceData.contactPerson
-          repairForm.contactPhone = mockDeviceData.contactPhone
-          scanned.value = true
-          ElMessage.success('扫码成功')
+          // 没有空白码，直接用第一个已绑定的
+          const asset = allAssets.value[0]
+          if (asset) {
+            deviceInfo.value = asset
+            repairForm.serialNumber = asset.serialNumber
+            repairForm.contactPerson = asset.contactPerson || ''
+            repairForm.contactPhone = asset.contactPhone || ''
+            scanned.value = true
+            ElMessage.success('扫码成功')
+          }
         }
       }, 1000)
     }
     
     // 扫描设备名牌（模拟）
     const scanDeviceNameplate = () => {
-      // 实际项目中这里会调用摄像头扫码API扫描设备名牌
+      // 模拟扫描到第一个设备的序列号
       setTimeout(() => {
-        // 模拟扫描到SN001
-        bindForm.serialNumber = 'SN001'
-        ElMessage.success('扫描设备名牌成功')
+        const firstAsset = allAssets.value[0]
+        if (firstAsset) {
+          bindForm.serialNumber = firstAsset.serialNumber
+          ElMessage.success('扫描设备名牌成功')
+        }
       }, 800)
     }
     
@@ -364,11 +328,16 @@ export default {
       
       await bindFormRef.value.validate((valid) => {
         if (valid && matchedDevice.value) {
+          // 通过assetStore绑定二维码到设备
+          const availableCodes = unboundQRCodes.value
+          if (availableCodes.length > 0) {
+            bindQRCode(availableCodes[0].token, matchedDevice.value.serialNumber)
+          }
           // 将匹配到的设备信息赋值给deviceInfo
           deviceInfo.value = matchedDevice.value
           repairForm.serialNumber = matchedDevice.value.serialNumber
-          repairForm.contactPerson = matchedDevice.value.contactPerson
-          repairForm.contactPhone = matchedDevice.value.contactPhone
+          repairForm.contactPerson = matchedDevice.value.contactPerson || ''
+          repairForm.contactPhone = matchedDevice.value.contactPhone || ''
           showBindDialog.value = false
           ElMessage.success('设备绑定成功')
           // 重置表单

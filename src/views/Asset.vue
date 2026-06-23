@@ -366,10 +366,11 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Plus, Camera, Box, OfficeBuilding, InfoFilled, Tools, Document, Clock, Monitor, Folder, Upload, Tickets, DocumentCopy, Picture, View, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ConfigurableTable from '../components/ConfigurableTable.vue'
+import { allAssets, addAsset, updateAsset, deleteAsset as storeDeleteAsset, getAssetBySerialNumber, bindQRCode, unboundQRCodes } from '../stores/assetStore'
 
 export default {
   name: 'Asset',
@@ -390,12 +391,15 @@ export default {
     const assetStatus = ref('')
     const currentPage = ref(1)
     const pageSize = ref(10)
-    const total = ref(100)
     const dialogVisible = ref(false)
     const detailVisible = ref(false)
     const qrcodeVisible = ref(false)
     const dialogTitle = ref('新增设备')
     const qrcodeUrl = ref('')
+
+    // 从 assetStore 读取数据
+    const assets = computed(() => allAssets.value)
+    const total = computed(() => allAssets.value.length)
 
     // 是否移动端
     const isMobile = ref(false)
@@ -590,39 +594,9 @@ export default {
     }
 
     const customers = ref([
-      { id: 1, name: '上海某机械有限公司' },
-      { id: 2, name: '北京某设备制造有限公司' },
-      { id: 3, name: '广州某工业设备有限公司' }
-    ])
-
-    const assets = ref([
-      {
-        serialNumber: 'SN001',
-        model: 'Model A',
-        customerName: '上海某机械有限公司',
-        status: '运行中',
-        installDate: '2026-01-10',
-        warrantyEndDate: '2027-01-10',
-        installAddress: '上海市浦东新区张江高科技园区'
-      },
-      {
-        serialNumber: 'SN002',
-        model: 'Model B',
-        customerName: '北京某设备制造有限公司',
-        status: '停机',
-        installDate: '2026-01-15',
-        warrantyEndDate: '2027-01-15',
-        installAddress: '北京市朝阳区建国路'
-      },
-      {
-        serialNumber: 'SN003',
-        model: 'Model C',
-        customerName: '广州某工业设备有限公司',
-        status: '维修中',
-        installDate: '2026-01-20',
-        warrantyEndDate: '2027-01-20',
-        installAddress: '广州市天河区珠江新城'
-      }
+      { id: 'C001', name: '上海某机械有限公司' },
+      { id: 'C002', name: '北京某设备制造有限公司' },
+      { id: 'C003', name: '广州某工业设备有限公司' }
     ])
 
     const handleAddAsset = () => {
@@ -642,14 +616,14 @@ export default {
     }
 
     const handleViewAsset = (row) => {
-      // 模拟数据
+      const asset = getAssetBySerialNumber(row.serialNumber)
       selectedAsset.value = {
         ...row,
-        manufactureDate: '2025-12-01',
-        salesDate: '2026-01-05',
-        isEL: true,
-        hasQRCode: row.hasQRCode || false, // 保留已绑定二维码的状态
-        qrCodeContent: row.qrCodeContent || '', // 保留已绑定的动态码内容
+        manufactureDate: asset?.manufactureDate || row.manufactureDate || '2025-12-01',
+        salesDate: asset?.saleDate || row.salesDate || '2026-01-05',
+        isEL: asset?.isEL !== undefined ? asset.isEL : true,
+        hasQRCode: asset?.hasQRCode || false,
+        qrCodeContent: asset?.qrCodeToken || '',
         maintenanceHistory: [
           { date: '2026-02-01', type: '例行维护', content: '设备检查', engineer: '王工程师', result: '正常' },
           { date: '2026-03-01', type: '故障维修', content: '更换零件', engineer: '李工程师', result: '已修复' }
@@ -665,31 +639,25 @@ export default {
     }
 
     const handleDeleteAsset = (serialNumber) => {
-      // 模拟删除
-      const index = assets.value.findIndex(a => a.serialNumber === serialNumber)
-      if (index !== -1) {
-        assets.value.splice(index, 1)
-      }
+      storeDeleteAsset(serialNumber)
     }
 
     const handleSubmit = () => {
-      // 模拟提交
+      const customer = customers.value.find(c => c.id === form.customerId)
       if (dialogTitle.value === '新增设备') {
-        const customer = customers.value.find(c => c.id === form.customerId)
         const newAsset = {
           ...form,
-          customerName: customer ? customer.name : ''
+          customerName: customer ? customer.name : '',
+          companyId: form.customerId
         }
-        assets.value.push(newAsset)
+        addAsset(newAsset)
       } else {
-        const index = assets.value.findIndex(a => a.serialNumber === form.serialNumber)
-        if (index !== -1) {
-          const customer = customers.value.find(c => c.id === form.customerId)
-          assets.value[index] = {
-            ...form,
-            customerName: customer ? customer.name : ''
-          }
+        const updatedData = {
+          ...form,
+          customerName: customer ? customer.name : '',
+          companyId: form.customerId
         }
+        updateAsset(form.serialNumber, updatedData)
       }
       dialogVisible.value = false
     }
@@ -707,83 +675,28 @@ export default {
       currentPage.value = current
     }
 
-    // 处理绑定动态码 - 调用手机相机扫描
+    // 处理绑定动态码 - 从assetStore中选取未绑定的二维码
     const handleBindQRCode = async () => {
-      try {
-        // 检查浏览器是否支持相机访问
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          ElMessage.warning('您的浏览器不支持相机功能，请使用扫码功能或手动输入')
-          // 降级方案：手动输入二维码内容
-          await handleManualBindQRCode()
-          return
-        }
-
-        // 尝试调用相机（在实际环境中，这里应该使用专门的扫码库如 @zxing/library 或 html5-qrcode）
-        // 这里模拟扫码成功
-        const scannedCode = await simulateScanQRCode()
-        
-        if (scannedCode) {
-          // 保存扫描到的二维码内容
-          selectedAsset.value.qrCodeContent = scannedCode
-          selectedAsset.value.hasQRCode = true
-          
-          // 同步更新资产列表中的状态
-          const assetIndex = assets.value.findIndex(a => a.serialNumber === selectedAsset.value.serialNumber)
-          if (assetIndex !== -1) {
-            assets.value[assetIndex].hasQRCode = true
-            assets.value[assetIndex].qrCodeContent = scannedCode
-          }
-          
-          ElMessage.success('动态码绑定成功')
-        }
-      } catch (error) {
-        console.error('扫码失败:', error)
-        ElMessage.error('扫码失败，请重试或使用手动输入')
-        // 降级方案：手动输入
-        await handleManualBindQRCode()
+      const availableCodes = unboundQRCodes.value
+      if (availableCodes.length === 0) {
+        ElMessage.warning('没有可用的空白码，请先在二维码管理中生成')
+        return
       }
-    }
-
-    // 模拟扫码功能（实际项目中应使用真实的扫码库）
-    const simulateScanQRCode = () => {
-      return new Promise((resolve) => {
-        // 模拟扫码延迟
-        setTimeout(() => {
-          // 模拟扫描到的二维码内容
-          const mockQRCode = `DYNAMIC-${selectedAsset.value.serialNumber}-${Date.now()}`
-          resolve(mockQRCode)
-        }, 1000)
-      })
-    }
-
-    // 手动输入二维码（降级方案）
-    const handleManualBindQRCode = () => {
-      ElMessageBox.prompt('请输入动态码内容', '手动绑定', {
-        confirmButtonText: '绑定',
-        cancelButtonText: '取消',
-        inputPattern: /.+/,
-        inputErrorMessage: '动态码不能为空'
-      }).then(({ value }) => {
-        selectedAsset.value.qrCodeContent = value
-        selectedAsset.value.hasQRCode = true
-        
-        // 同步更新资产列表中的状态
-        const assetIndex = assets.value.findIndex(a => a.serialNumber === selectedAsset.value.serialNumber)
-        if (assetIndex !== -1) {
-          assets.value[assetIndex].hasQRCode = true
-          assets.value[assetIndex].qrCodeContent = value
-        }
-        
-        ElMessage.success('动态码绑定成功')
-      }).catch(() => {
-        ElMessage.info('已取消绑定')
-      })
+      // 选取第一个未绑定的二维码
+      const token = availableCodes[0].token
+      bindQRCode(token, selectedAsset.value.serialNumber)
+      selectedAsset.value.hasQRCode = true
+      selectedAsset.value.qrCodeContent = token
+      ElMessage.success('动态码绑定成功')
     }
 
     const handleViewQRCode = () => {
-      // 显示已绑定的动态码
-      const qrContent = selectedAsset.value.qrCodeContent || selectedAsset.value.serialNumber
-      qrcodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrContent)}`
+      // 二维码内容为完整URL，扫码后可直接打开报修页面
+      const token = selectedAsset.value.qrCodeContent || ''
+      const scanUrl = token
+        ? `${window.location.origin}/scan-result?token=${token}`
+        : `${window.location.origin}/scan-result?serial=${selectedAsset.value.serialNumber}`
+      qrcodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(scanUrl)}`
       qrcodeVisible.value = true
     }
 
@@ -821,7 +734,6 @@ export default {
       handleCurrentChange,
       handleSortChange,
       handleBindQRCode,
-      handleManualBindQRCode,
       handleViewQRCode,
       handleDownloadQRCode,
       handleDocumentChange,

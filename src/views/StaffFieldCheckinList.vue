@@ -124,7 +124,7 @@
         <div class="card-footer">
           <span class="view-detail-hint">点击查看详情</span>
           <template v-if="item.status === '已签到'">
-            <el-button size="small" type="warning" @click.stop="handleCheckOut(item)">签离</el-button>
+            <el-button size="small" type="warning" @click.stop="handleCheckOut(item)">{{ item.checkoutTime ? '再次签离' : '签离' }}</el-button>
             <el-button v-if="item.checkoutTime" size="small" type="success" @click.stop="handleSubmitApproval(item)">提交审批</el-button>
           </template>
           <template v-else-if="item.status === '已提交'">
@@ -174,6 +174,15 @@
           <div class="detail-grid">
             <div class="detail-item"><span class="detail-label">签到时间</span><span class="detail-value highlight">{{ detailDrawer.data.checkinTime || '-' }}</span></div>
             <div class="detail-item"><span class="detail-label">签到地点</span><span class="detail-value">{{ detailDrawer.data.location || '-' }}</span></div>
+          </div>
+          <!-- 多次签离记录 -->
+          <div v-if="detailDrawer.data.checkoutRecords && detailDrawer.data.checkoutRecords.length > 0" style="margin-top: 10px;">
+            <div v-for="(record, idx) in detailDrawer.data.checkoutRecords" :key="idx" class="detail-grid" style="margin-bottom: 6px; padding: 6px 0; border-top: 1px dashed #ebeef5;">
+              <div class="detail-item"><span class="detail-label">签离时间{{ detailDrawer.data.checkoutRecords.length > 1 ? `(${idx + 1})` : '' }}</span><span class="detail-value">{{ record.checkoutTime }}</span></div>
+              <div class="detail-item"><span class="detail-label">签离地点{{ detailDrawer.data.checkoutRecords.length > 1 ? `(${idx + 1})` : '' }}</span><span class="detail-value">{{ record.checkOutLocation || '-' }}</span></div>
+            </div>
+          </div>
+          <div v-else class="detail-grid">
             <div class="detail-item"><span class="detail-label">签离时间</span><span class="detail-value" :class="{ missing: !detailDrawer.data.checkoutTime }">{{ detailDrawer.data.checkoutTime || '未签离' }}</span></div>
             <div class="detail-item"><span class="detail-label">签离地点</span><span class="detail-value">{{ detailDrawer.data.checkOutLocation || '-' }}</span></div>
           </div>
@@ -245,7 +254,7 @@
         <!-- 底部操作按钮 -->
         <div class="detail-actions">
           <template v-if="detailDrawer.data.status === '已签到'">
-            <el-button type="warning" size="large" round block @click="handleCheckOut(detailDrawer.data); detailDrawer.visible = false">签离</el-button>
+            <el-button type="warning" size="large" round block @click="handleCheckOut(detailDrawer.data); detailDrawer.visible = false">{{ detailDrawer.data.checkoutTime ? '再次签离' : '签离' }}</el-button>
             <el-button v-if="detailDrawer.data.checkoutTime" type="success" size="large" round block @click="handleSubmitApproval(detailDrawer.data); detailDrawer.visible = false" style="margin-top:8px">提交审批</el-button>
           </template>
           <template v-else-if="detailDrawer.data.status === '已提交'">
@@ -257,10 +266,10 @@
       </div>
     </el-drawer>
 
-    <!-- 签离/填写日报对话框 -->
+    <!-- 签离对话框（轻量化：只保留时间+定位） -->
     <el-dialog
       v-model="checkOutDialog.visible"
-      :title="checkOutDialog.data?.type === 'workorder' ? '签离 & 填写日报' : '签离'"
+      title="签离"
       width="95%"
       :show-close="false"
       class="mobile-dialog"
@@ -282,25 +291,50 @@
             <el-button link @click="refreshCheckOutLocation"><el-icon><Refresh /></el-icon></el-button>
           </div>
         </div>
+      </div>
+      <template #footer>
+        <el-button @click="checkOutDialog.visible = false">取消</el-button>
+        <el-button type="primary" @click="submitCheckOut">确认签离</el-button>
+      </template>
+    </el-dialog>
 
-        <!-- ===== 工单打卡：完整日报 ===== -->
-        <template v-if="checkOutDialog.data?.type === 'workorder'">
+    <!-- 提交审批对话框（包含日报字段） -->
+    <el-dialog
+      v-model="approvalSubmitDialog.visible"
+      title="提交审批 & 填写日报"
+      width="95%"
+      :show-close="false"
+      class="mobile-dialog"
+    >
+      <div class="checkout-form">
+        <!-- 签到/签离信息摘要 -->
+        <div class="form-item">
+          <label class="form-label">签到时间</label>
+          <div class="info-value">{{ approvalSubmitDialog.data?.checkinTime }}</div>
+        </div>
+        <div class="form-item" v-if="approvalSubmitDialog.data?.checkoutTime">
+          <label class="form-label">签离时间</label>
+          <div class="info-value">{{ approvalSubmitDialog.data.checkoutTime }}</div>
+        </div>
+
+        <!-- 工单打卡：完整日报 -->
+        <template v-if="approvalSubmitDialog.data?.type === 'workorder'">
           <div class="divider"><span>日报信息</span></div>
           <div class="form-item">
             <label class="form-label">公司/驻地出发时间 <span class="required">*</span></label>
-            <el-time-picker v-model="checkOutDialog.form.departTime" format="HH:mm" value-format="HH:mm" placeholder="选择时间" style="width: 100%" />
+            <el-date-picker v-model="approvalSubmitDialog.form.departTime" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" placeholder="选择日期时间" style="width: 100%" />
           </div>
           <div class="form-item">
             <label class="form-label">现场作业开始时间 <span class="required">*</span></label>
-            <el-time-picker v-model="checkOutDialog.form.workStartTime" format="HH:mm" value-format="HH:mm" placeholder="选择时间" style="width: 100%" />
+            <el-date-picker v-model="approvalSubmitDialog.form.workStartTime" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" placeholder="选择日期时间" style="width: 100%" />
           </div>
           <div class="form-item">
             <label class="form-label">返程/抵达酒店时间 <span class="required">*</span></label>
-            <el-time-picker v-model="checkOutDialog.form.returnTime" format="HH:mm" value-format="HH:mm" placeholder="选择时间" style="width: 100%" />
+            <el-date-picker v-model="approvalSubmitDialog.form.returnTime" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" placeholder="选择日期时间" style="width: 100%" />
           </div>
           <div class="form-item">
             <label class="form-label">现场作业结束时间 <span class="required">*</span></label>
-            <el-time-picker v-model="checkOutDialog.form.workEndTime" format="HH:mm" value-format="HH:mm" placeholder="选择时间" style="width: 100%" />
+            <el-date-picker v-model="approvalSubmitDialog.form.workEndTime" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" placeholder="选择日期时间" style="width: 100%" />
           </div>
           <div class="form-item">
             <label class="form-label">共同作业人员</label>
@@ -309,53 +343,88 @@
                 v-for="name in coworkerOptions"
                 :key="name"
                 class="coworker-tag"
-                :effect="checkOutDialog.form.coworker === name ? 'dark' : 'plain'"
-                :type="checkOutDialog.form.coworker === name ? 'primary' : 'info'"
-                @click="checkOutDialog.form.coworker = checkOutDialog.form.coworker === name ? '' : name"
+                :effect="approvalSubmitDialog.form.coworker === name ? 'dark' : 'plain'"
+                :type="approvalSubmitDialog.form.coworker === name ? 'primary' : 'info'"
+                @click="approvalSubmitDialog.form.coworker = approvalSubmitDialog.form.coworker === name ? '' : name"
               >{{ name }}</el-tag>
             </div>
           </div>
           <div class="form-item">
             <label class="form-label">客户设备是否停机？ <span class="required">*</span></label>
-            <el-radio-group v-model="checkOutDialog.form.deviceStopped">
+            <el-radio-group v-model="approvalSubmitDialog.form.deviceStopped">
               <el-radio :value="true">是</el-radio>
               <el-radio :value="false">否</el-radio>
             </el-radio-group>
           </div>
           <div class="form-item">
             <label class="form-label">当日具体作业内容 <span class="required">*</span></label>
-            <el-input v-model="checkOutDialog.form.workContent" type="textarea" :rows="4" placeholder="当日具体作业内容" maxlength="500" show-word-limit />
+            <el-input v-model="approvalSubmitDialog.form.workContent" type="textarea" :rows="4" placeholder="当日具体作业内容" maxlength="500" show-word-limit />
           </div>
           <div class="form-item">
             <label class="form-label">业务跟进</label>
             <div class="followup-options">
-              <el-checkbox v-model="checkOutDialog.form.bizFollowUps" label="quotation">零部件报价</el-checkbox>
-              <el-checkbox v-model="checkOutDialog.form.bizFollowUps" label="password">密码申请</el-checkbox>
-              <el-checkbox v-model="checkOutDialog.form.bizFollowUps" label="free_service">无偿服务申请</el-checkbox>
-              <el-checkbox v-model="checkOutDialog.form.bizFollowUps" label="other">其他</el-checkbox>
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="quotation">零部件报价</el-checkbox>
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="password">密码申请</el-checkbox>
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="free_service">无偿服务申请</el-checkbox>
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="other">其他</el-checkbox>
             </div>
           </div>
           <div class="form-item">
             <label class="form-label">作业遗留事项</label>
-            <el-input v-model="checkOutDialog.form.pendingIssues" type="textarea" :rows="2" placeholder="无则填「无」" maxlength="300" show-word-limit />
+            <el-input v-model="approvalSubmitDialog.form.pendingIssues" type="textarea" :rows="2" placeholder="无则填「无」" maxlength="300" show-word-limit />
+          </div>
+        </template>
+
+        <!-- 日常打卡：简化日报 -->
+        <template v-else>
+          <div class="divider"><span>日报信息</span></div>
+          <div class="form-item">
+            <label class="form-label">共同作业人员</label>
+            <div class="coworker-select">
+              <el-tag
+                v-for="name in coworkerOptions"
+                :key="name"
+                class="coworker-tag"
+                :effect="approvalSubmitDialog.form.coworker === name ? 'dark' : 'plain'"
+                :type="approvalSubmitDialog.form.coworker === name ? 'primary' : 'info'"
+                @click="approvalSubmitDialog.form.coworker = approvalSubmitDialog.form.coworker === name ? '' : name"
+              >{{ name }}</el-tag>
+            </div>
+          </div>
+          <div class="form-item">
+            <label class="form-label">当天具体作业内容 <span class="required">*</span></label>
+            <div class="quick-tags" style="margin-bottom: 8px;">
+              <el-tag class="quick-tag" effect="plain" @click="appendWorkContent('拜访')">拜访</el-tag>
+              <el-tag class="quick-tag" effect="plain" @click="appendWorkContent('商谈')">商谈</el-tag>
+            </div>
+            <el-input v-model="approvalSubmitDialog.form.workContent" type="textarea" :rows="3" placeholder="请输入当天作业内容，也可点击上方快捷标签" maxlength="500" show-word-limit />
+          </div>
+          <div class="form-item">
+            <label class="form-label">业务跟进</label>
+            <div class="followup-options">
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="quotation">零部件报价</el-checkbox>
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="password">密码申请</el-checkbox>
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="free_service">无偿服务申请</el-checkbox>
+              <el-checkbox v-model="approvalSubmitDialog.form.bizFollowUps" label="other">其他</el-checkbox>
+            </div>
           </div>
         </template>
 
         <div class="form-item">
           <label class="form-label">本次任务是否完成？ <span class="required">*</span></label>
-          <el-radio-group v-model="checkOutDialog.form.taskCompleted">
+          <el-radio-group v-model="approvalSubmitDialog.form.taskCompleted">
             <el-radio :value="true">是</el-radio>
             <el-radio :value="false">否</el-radio>
           </el-radio-group>
         </div>
-        <div class="form-item" v-if="checkOutDialog.form.taskCompleted === false">
+        <div class="form-item" v-if="approvalSubmitDialog.form.taskCompleted === false">
           <label class="form-label">未完成原因 <span class="required">*</span></label>
-          <el-input v-model="checkOutDialog.form.incompleteReason" type="textarea" :rows="2" placeholder="请填写未完成原因" />
+          <el-input v-model="approvalSubmitDialog.form.incompleteReason" type="textarea" :rows="2" placeholder="请填写未完成原因" />
         </div>
       </div>
       <template #footer>
-        <el-button @click="checkOutDialog.visible = false">取消</el-button>
-        <el-button type="primary" @click="submitCheckOut" :disabled="!canCheckOut">确认签离</el-button>
+        <el-button @click="approvalSubmitDialog.visible = false">取消</el-button>
+        <el-button type="primary" @click="submitApprovalWithReport" :disabled="!canSubmitApproval">确认提交审批</el-button>
       </template>
     </el-dialog>
 
@@ -604,13 +673,21 @@ const completedCount = computed(() => {
   ).length
 })
 
-// 签离对话框
+// 签离对话框（轻量化：只保留时间+定位）
 const checkOutDialog = ref({
   visible: false,
   data: null,
   checkoutTime: '',
   form: {
-    location: '',
+    location: ''
+  }
+})
+
+// 提交审批对话框（包含日报字段）
+const approvalSubmitDialog = ref({
+  visible: false,
+  data: null,
+  form: {
     departTime: '', workStartTime: '', returnTime: '', workEndTime: '',
     coworker: '', deviceStopped: null,
     workContent: '', faultAnalysis: '', bizFollowUps: [], pendingIssues: '',
@@ -621,9 +698,15 @@ const checkOutDialog = ref({
 // 共同作业人员选项（演示环境5人）
 const coworkerOptions = ['王工程师', '陈工程师', '刘工程师', '赵工程师', '孙工程师']
 
+// 签离不需要额外校验，只要有定位即可
 const canCheckOut = computed(() => {
-  const f = checkOutDialog.value.form
-  const type = checkOutDialog.value.data?.type
+  return !!checkOutDialog.value.form.location
+})
+
+// 提交审批校验
+const canSubmitApproval = computed(() => {
+  const f = approvalSubmitDialog.value.form
+  const type = approvalSubmitDialog.value.data?.type
   // 所有类型都必填：任务是否完成
   if (f.taskCompleted === null) return false
   if (f.taskCompleted === false && !f.incompleteReason) return false
@@ -631,9 +714,22 @@ const canCheckOut = computed(() => {
   if (type === 'workorder') {
     if (!f.departTime || !f.workStartTime || !f.returnTime || !f.workEndTime) return false
     if (!f.workContent || f.deviceStopped === null) return false
+  } else {
+    // 日常打卡：需要填作业内容
+    if (!f.workContent) return false
   }
   return true
 })
+
+// 快捷标签追加作业内容
+const appendWorkContent = (text) => {
+  const current = approvalSubmitDialog.value.form.workContent
+  if (current && !current.endsWith('\n') && !current.endsWith('，')) {
+    approvalSubmitDialog.value.form.workContent = current + '，' + text
+  } else {
+    approvalSubmitDialog.value.form.workContent = (current || '') + text
+  }
+}
 
 // 审批对话框
 const approvalDialog = ref({
@@ -699,13 +795,7 @@ const handleCheckOut = (item) => {
   const now = new Date()
   checkOutDialog.value.checkoutTime = now.toISOString().slice(0, 19).replace('T', ' ')
   checkOutDialog.value.form = {
-    location: item.location || item.checkOutLocation || '定位中...',
-    departTime: item.departTime || '', workStartTime: item.workStartTime || '',
-    returnTime: '', workEndTime: '',
-    coworker: item.coworker || '', deviceStopped: item.deviceStopped,
-    workContent: item.workContent || '', faultAnalysis: item.faultAnalysis || '',
-    bizFollowUps: item.bizFollowUps || [], pendingIssues: item.pendingIssues || '',
-    taskCompleted: null, incompleteReason: ''
+    location: item.location || item.checkOutLocation || '定位中...'
   }
   // 先弹出对话框，定位在后台异步进行
   checkOutDialog.value.visible = true
@@ -728,20 +818,17 @@ const refreshCheckOutLocation = async () => {
 const submitCheckOut = () => {
   const item = checkOutDialog.value.data
   if (item) {
+    // 支持多次签离：将签离记录追加到数组
+    if (!item.checkoutRecords) {
+      item.checkoutRecords = []
+    }
+    item.checkoutRecords.push({
+      checkoutTime: checkOutDialog.value.checkoutTime,
+      checkOutLocation: checkOutDialog.value.form.location
+    })
+    // 同时更新最新的签离时间和地点（兼容旧逻辑）
     item.checkoutTime = checkOutDialog.value.checkoutTime
     item.checkOutLocation = checkOutDialog.value.form.location
-    item.departTime = checkOutDialog.value.form.departTime
-    item.workStartTime = checkOutDialog.value.form.workStartTime
-    item.returnTime = checkOutDialog.value.form.returnTime
-    item.workEndTime = checkOutDialog.value.form.workEndTime
-    item.coworker = checkOutDialog.value.form.coworker
-    item.deviceStopped = checkOutDialog.value.form.deviceStopped
-    item.workContent = checkOutDialog.value.form.workContent
-    item.faultAnalysis = checkOutDialog.value.form.faultAnalysis
-    item.bizFollowUps = checkOutDialog.value.form.bizFollowUps
-    item.pendingIssues = checkOutDialog.value.form.pendingIssues || '无'
-    item.taskCompleted = checkOutDialog.value.form.taskCompleted
-    item.incompleteReason = checkOutDialog.value.form.incompleteReason
     item.status = '已签到'
 
     localStorage.setItem('checkinRecords', JSON.stringify(checkinList.value))
@@ -752,6 +839,39 @@ const submitCheckOut = () => {
 }
 
 const handleSubmitApproval = (item) => {
+  // 打开提交审批对话框，填写日报信息
+  approvalSubmitDialog.value.data = item
+  approvalSubmitDialog.value.form = {
+    departTime: item.departTime || '', workStartTime: item.workStartTime || '',
+    returnTime: item.returnTime || '', workEndTime: item.workEndTime || '',
+    coworker: item.coworker || '', deviceStopped: item.deviceStopped ?? null,
+    workContent: item.workContent || '', faultAnalysis: item.faultAnalysis || '',
+    bizFollowUps: item.bizFollowUps || [], pendingIssues: item.pendingIssues || '',
+    taskCompleted: null, incompleteReason: ''
+  }
+  approvalSubmitDialog.value.visible = true
+}
+
+// 提交审批（含日报信息）
+const submitApprovalWithReport = () => {
+  const item = approvalSubmitDialog.value.data
+  if (!item) return
+
+  const f = approvalSubmitDialog.value.form
+  // 将日报信息写入打卡记录
+  item.departTime = f.departTime
+  item.workStartTime = f.workStartTime
+  item.returnTime = f.returnTime
+  item.workEndTime = f.workEndTime
+  item.coworker = f.coworker
+  item.deviceStopped = f.deviceStopped
+  item.workContent = f.workContent
+  item.faultAnalysis = f.faultAnalysis
+  item.bizFollowUps = f.bizFollowUps
+  item.pendingIssues = f.pendingIssues || '无'
+  item.taskCompleted = f.taskCompleted
+  item.incompleteReason = f.incompleteReason
+
   // 锁定打卡：更新状态为已提交，不可再修改
   item.status = '已提交'
   item.submitTime = new Date().toISOString().slice(0, 19).replace('T', ' ')
@@ -776,6 +896,7 @@ const handleSubmitApproval = (item) => {
     jumpParams: { filter: 'pending_approval' }
   })
 
+  approvalSubmitDialog.value.visible = false
   ElMessage.success('已提交审批，打卡记录已锁定')
 }
 
@@ -1698,6 +1819,19 @@ const formatMonth = (date) => {
   transition: all 0.2s;
 }
 .coworker-tag:hover {
+  opacity: 0.8;
+}
+
+/* 快捷标签 */
+.quick-tags {
+  display: flex;
+  gap: 8px;
+}
+.quick-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.quick-tag:hover {
   opacity: 0.8;
 }
 </style>

@@ -87,7 +87,7 @@
             </el-table-column>
           </el-table>
         </el-tab-pane>
-        <el-tab-pane label="防伪验证">
+        <el-tab-pane label="防伪验证" v-if="false">
           <div class="verify-container">
             <el-form :model="verifyForm" label-width="120px" class="mt-4">
               <el-form-item label="二维码Token">
@@ -184,8 +184,9 @@
 </template>
 
 <script>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
+import { allQRCodes, allAssets, bindQRCode, generateBatchQRCodes, getAssetBySerialNumber } from '../stores/assetStore'
 
 export default {
   name: 'QRCode',
@@ -197,7 +198,6 @@ export default {
     const qrcodeStatus = ref('')
     const currentPage = ref(1)
     const pageSize = ref(10)
-    const total = ref(100)
     const generateVisible = ref(false)
     const viewVisible = ref(false)
     const bindVisible = ref(false)
@@ -220,62 +220,42 @@ export default {
     // 绑定管理相关
     const bindSearchQuery = ref('')
 
-    const qrcodes = ref([
-      {
-        id: 1,
-        token: 'TOKEN001',
-        status: '未绑定',
-        bindAsset: '',
-        createTime: '2026-03-01 10:00:00',
-        bindTime: ''
-      },
-      {
-        id: 2,
-        token: 'TOKEN002',
-        status: '已绑定',
-        bindAsset: 'SN001',
-        createTime: '2026-03-01 10:00:00',
-        bindTime: '2026-03-02 14:00:00'
-      },
-      {
-        id: 3,
-        token: 'TOKEN003',
-        status: '未绑定',
-        bindAsset: '',
-        createTime: '2026-03-01 10:00:00',
-        bindTime: ''
-      }
-    ])
+    // 从 assetStore 读取数据
+    const qrcodes = computed(() => allQRCodes.value)
+    const assets = computed(() => allAssets.value)
+    const total = computed(() => allQRCodes.value.length)
 
-    const bindRecords = ref([
-      {
-        id: 1,
-        token: 'TOKEN002',
-        assetSerialNumber: 'SN001',
-        assetModel: 'Model A',
-        customerName: '上海某机械有限公司',
-        bindTime: '2026-03-02 14:00:00'
-      }
-    ])
-
-    const assets = ref([
-      { serialNumber: 'SN001', model: 'Model A' },
-      { serialNumber: 'SN002', model: 'Model B' },
-      { serialNumber: 'SN003', model: 'Model C' }
-    ])
+    // 绑定记录：从二维码和设备数据中动态生成
+    const bindRecords = computed(() => {
+      return allQRCodes.value
+        .filter(q => q.status === '已绑定' && q.bindAsset)
+        .map(q => {
+          const asset = getAssetBySerialNumber(q.bindAsset)
+          return {
+            id: q.id,
+            token: q.token,
+            assetSerialNumber: q.bindAsset,
+            assetModel: asset ? asset.model : '',
+            customerName: asset ? asset.customerName : '',
+            bindTime: q.bindTime
+          }
+        })
+    })
 
     const handleGenerateBatch = () => {
       generateVisible.value = true
     }
 
     const handleSubmitGenerate = () => {
-      // 模拟生成
+      generateBatchQRCodes(generateForm.count, generateForm.batchName)
       generateVisible.value = false
     }
 
     const handleViewQRCode = (row) => {
       currentQRCode.value = row
-      currentQRCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${row.token}`
+      // 二维码内容为完整URL，扫码后可直接打开报修页面
+      const scanUrl = `${window.location.origin}/scan-result?token=${row.token}`
+      currentQRCodeUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(scanUrl)}`
       viewVisible.value = true
     }
 
@@ -285,13 +265,7 @@ export default {
     }
 
     const handleSubmitBind = () => {
-      // 模拟绑定
-      const index = qrcodes.value.findIndex(q => q.token === bindForm.token)
-      if (index !== -1) {
-        qrcodes.value[index].status = '已绑定'
-        qrcodes.value[index].bindAsset = bindForm.assetSerialNumber
-        qrcodes.value[index].bindTime = new Date().toLocaleString()
-      }
+      bindQRCode(bindForm.token, bindForm.assetSerialNumber)
       bindVisible.value = false
     }
 
@@ -329,8 +303,9 @@ export default {
     }
 
     const handleVerify = () => {
-      // 模拟验证
-      if (verifyForm.token && verifyForm.assetSerialNumber) {
+      // 验证二维码与设备的绑定关系
+      const qrcode = allQRCodes.value.find(q => q.token === verifyForm.token)
+      if (qrcode && qrcode.status === '已绑定' && qrcode.bindAsset === verifyForm.assetSerialNumber) {
         verifyResult.value = {
           status: 'valid',
           message: '验证通过，二维码与设备绑定关系正常'

@@ -176,6 +176,19 @@
           </el-form-item>
           <el-form-item label="工作内容">
             <el-input v-model="assignFormData.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+            <div class="work-content-tags">
+              <span class="tags-label">快捷填入：</span>
+              <el-tag
+                v-for="tag in workContentTags"
+                :key="tag"
+                class="work-tag"
+                :effect="isTagSelected(tag) ? 'dark' : 'plain'"
+                :type="isTagSelected(tag) ? 'primary' : ''"
+                @click="toggleWorkTag(tag)"
+              >
+                {{ tag }}
+              </el-tag>
+            </div>
           </el-form-item>
           <el-form-item label="工作开始时间">
             <el-date-picker
@@ -590,6 +603,24 @@ const assignFormData = reactive({
   workEndTime: null,
   vehicle: 'self'
 })
+
+const workContentTags = [
+  '设备维修', '故障诊断', '配件更换', '设备调试', '试加工测试',
+  '设备改造', '操作培训', '定期保养', '检修巡检', '技术指导'
+]
+
+const toggleWorkTag = (tag) => {
+  const current = assignFormData.workContent || ''
+  if (current.includes(tag)) {
+    assignFormData.workContent = current.replace(new RegExp(tag + '(、)?'), '').replace(/、$/, '').replace(/^、/, '')
+  } else {
+    assignFormData.workContent = current ? current + '、' + tag : tag
+  }
+}
+
+const isTagSelected = (tag) => {
+  return (assignFormData.workContent || '').includes(tag)
+}
 
 const getCategoryText = (cat) => {
   const map = { installation: '安装工单', service: '服务工单' }
@@ -1148,5 +1179,23 @@ const clearAllFilters = () => {
 }
 .repair-footer .el-button {
   flex: 1;
+}
+
+.work-content-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tags-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.work-tag {
+  cursor: pointer;
+  user-select: none;
 }
 </style>

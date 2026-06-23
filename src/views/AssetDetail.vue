@@ -161,53 +161,89 @@
       class="mobile-dialog repair-dialog"
     >
       <el-form :model="repairForm" label-position="top">
-        <el-form-item label="设备序列号">
-          <el-input v-model="repairForm.serialNumber" disabled />
+        <!-- 客户信息 -->
+        <div class="repair-section">
+          <div class="repair-section-title">客户信息</div>
+        </div>
+        <el-form-item label="客户公司">
+          <el-input v-model="repairForm.customerName" disabled />
         </el-form-item>
+        <el-form-item label="联系人">
+          <el-input v-model="repairForm.contactPerson" placeholder="联系人姓名" />
+        </el-form-item>
+        <el-form-item label="联系电话">
+          <el-input v-model="repairForm.contactPhone" placeholder="联系电话" />
+        </el-form-item>
+        <el-form-item label="地址">
+          <el-input v-model="repairForm.address" disabled />
+        </el-form-item>
+
+        <!-- 工单信息 -->
+        <div class="repair-section">
+          <div class="repair-section-title">工单信息</div>
+        </div>
+        <el-form-item label="服务类型">
+          <el-radio-group v-model="repairForm.subType" class="type-radio-group">
+            <el-radio-button label="repair">维修</el-radio-button>
+            <el-radio-button label="trial_processing">试加工</el-radio-button>
+            <el-radio-button label="refitting">改造</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <!-- 设备信息 -->
+        <div class="repair-section">
+          <div class="repair-section-title">设备信息</div>
+        </div>
         <el-form-item label="设备型号">
           <el-input v-model="repairForm.model" disabled />
         </el-form-item>
-        <el-form-item label="故障描述" required>
+        <el-form-item label="序列号">
+          <el-input v-model="repairForm.serialNumber" disabled />
+        </el-form-item>
+        <el-form-item v-if="repairForm.warrantyStatus" label="保修状态">
+          <el-tag :type="repairForm.warrantyStatus === 'in_warranty' ? 'success' : 'warning'" size="large">
+            {{ repairForm.warrantyStatus === 'in_warranty' ? '保内' : '保外' }}
+          </el-tag>
+        </el-form-item>
+
+        <!-- 故障描述 -->
+        <div class="repair-section">
+          <div class="repair-section-title">故障描述</div>
+        </div>
+        <el-form-item required>
           <el-input 
             v-model="repairForm.description" 
             type="textarea" 
             :rows="4"
-            placeholder="请详细描述故障现象..."
+            placeholder="请详细描述设备故障现象..."
           />
         </el-form-item>
+        <div class="fault-tags">
+          <span class="tag-label">常见故障：</span>
+          <el-tag
+            v-for="tag in commonFaultTags"
+            :key="tag.label"
+            class="fault-tag"
+            effect="plain"
+            @click="repairForm.description = tag.description"
+          >
+            {{ tag.label }}
+          </el-tag>
+        </div>
 
-        <!-- 附件上传区域 -->
+        <!-- 故障附件 -->
         <el-form-item label="故障附件">
           <div class="attachment-section">
-            <!-- 附件类型选择按钮 -->
             <div class="attachment-types">
               <el-button type="primary" plain size="small" @click="triggerFileInput('image')">
                 <el-icon><Picture /></el-icon>
-                照片
+                拍照/照片
               </el-button>
               <el-button type="success" plain size="small" @click="triggerFileInput('video')">
                 <el-icon><VideoCamera /></el-icon>
                 视频
               </el-button>
-              <el-button type="warning" plain size="small" @click="toggleRecording">
-                <el-icon><Microphone /></el-icon>
-                {{ isRecording ? '停止录音' : '录音' }}
-              </el-button>
             </div>
-
-            <!-- 录音状态显示 -->
-            <div v-if="isRecording" class="recording-status">
-              <div class="recording-indicator">
-                <span class="recording-dot"></span>
-                <span>录音中 {{ recordingDuration }}s</span>
-              </div>
-              <el-button type="danger" size="small" @click="stopRecording">
-                <el-icon><CircleClose /></el-icon>
-                停止
-              </el-button>
-            </div>
-
-            <!-- 隐藏的文件输入 -->
             <input
               ref="fileInput"
               type="file"
@@ -216,8 +252,6 @@
               :capture="fileCapture"
               @change="handleFileChange"
             />
-
-            <!-- 附件列表 -->
             <div v-if="repairForm.attachments.length > 0" class="attachment-list">
               <div
                 v-for="(file, index) in repairForm.attachments"
@@ -227,24 +261,17 @@
                 <div class="attachment-info">
                   <el-icon class="attachment-icon">
                     <Picture v-if="file.type === 'image'" />
-                    <VideoCamera v-else-if="file.type === 'video'" />
-                    <Microphone v-else-if="file.type === 'audio'" />
+                    <VideoCamera v-else />
                   </el-icon>
                   <span class="attachment-name">{{ file.name }}</span>
                   <span class="attachment-size">({{ formatFileSize(file.size) }})</span>
                 </div>
-                <el-button
-                  type="danger"
-                  link
-                  size="small"
-                  @click="removeAttachment(index)"
-                >
+                <el-button type="danger" link size="small" @click="removeAttachment(index)">
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
             </div>
-
-            <p class="attachment-tip">支持上传照片、视频和录音，帮助工程师更快定位问题</p>
+            <p class="attachment-tip">支持上传故障照片和视频，帮助工程师更快定位问题</p>
           </div>
         </el-form-item>
 
@@ -255,16 +282,12 @@
             <el-radio-button value="high">特急</el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-form-item label="联系人">
-          <el-input v-model="repairForm.contactPerson" placeholder="联系人姓名" />
-        </el-form-item>
-        <el-form-item label="联系电话" required>
-          <el-input v-model="repairForm.contactPhone" placeholder="联系电话" />
-        </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showRepairDialog = false">取消</el-button>
-        <el-button type="primary" @click="submitRepair">提交报修</el-button>
+        <div class="repair-footer">
+          <el-button size="large" @click="showRepairDialog = false">取消</el-button>
+          <el-button type="primary" size="large" @click="submitRepair">提交报修</el-button>
+        </div>
       </template>
     </el-dialog>
 
@@ -325,11 +348,10 @@ import {
   Folder,
   Picture,
   VideoCamera,
-  Microphone,
-  CircleClose,
   Delete
 } from '@element-plus/icons-vue'
 import { createWorkorder, getCustomerWorkorders, state as workorderFlowState } from '../stores/workorderFlowStore.js'
+import { getAssetBySerialNumber } from '../stores/assetStore.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -362,22 +384,30 @@ const showManualDialog = ref(false)
 const repairForm = ref({
   serialNumber: '',
   model: '',
+  customerName: '',
+  address: '',
   description: '',
   urgency: 'medium',
+  subType: 'repair',
   contactPerson: '',
   contactPhone: '',
+  warrantyStatus: '',
   attachments: []
 })
+
+// 常见故障标签
+const commonFaultTags = [
+  { label: '无法启动', description: '设备无法正常启动，通电后无响应' },
+  { label: '异响', description: '设备运行过程中出现异常响声' },
+  { label: '漏油', description: '设备存在漏油现象，需检查密封件' },
+  { label: '精度异常', description: '设备加工精度超出允许偏差范围' },
+  { label: '过热报警', description: '设备运行中触发过热报警保护' }
+]
 
 // 附件上传相关
 const fileInput = ref(null)
 const fileAccept = ref('image/*')
 const fileCapture = ref('environment')
-const isRecording = ref(false)
-const recordingDuration = ref(0)
-let recordingTimer = null
-let mediaRecorder = null
-let recordedChunks = []
 
 // 工单标签
 const workorderTabs = [
@@ -626,73 +656,6 @@ const removeAttachment = (index) => {
   ElMessage.success('附件已删除')
 }
 
-// 切换录音状态
-const toggleRecording = async () => {
-  if (isRecording.value) {
-    stopRecording()
-  } else {
-    startRecording()
-  }
-}
-
-// 开始录音
-const startRecording = async () => {
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-    mediaRecorder = new MediaRecorder(stream)
-    recordedChunks = []
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        recordedChunks.push(event.data)
-      }
-    }
-
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(recordedChunks, { type: 'audio/webm' })
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        const attachment = {
-          name: `录音_${new Date().toLocaleTimeString()}.webm`,
-          type: 'audio',
-          size: blob.size,
-          data: e.target.result,
-          uploadTime: new Date().toISOString()
-        }
-        repairForm.value.attachments.push(attachment)
-        ElMessage.success('录音已保存')
-      }
-      reader.readAsDataURL(blob)
-
-      // 停止所有音频轨道
-      stream.getTracks().forEach(track => track.stop())
-    }
-
-    mediaRecorder.start()
-    isRecording.value = true
-    recordingDuration.value = 0
-
-    // 开始计时
-    recordingTimer = setInterval(() => {
-      recordingDuration.value++
-    }, 1000)
-
-    ElMessage.info('开始录音...')
-  } catch (err) {
-    console.error('录音失败:', err)
-    ElMessage.error('无法访问麦克风，请检查权限设置')
-  }
-}
-
-// 停止录音
-const stopRecording = () => {
-  if (mediaRecorder && isRecording.value) {
-    mediaRecorder.stop()
-    isRecording.value = false
-    clearInterval(recordingTimer)
-  }
-}
-
 const submitRepair = () => {
   if (!repairForm.value.description) {
     ElMessage.warning('请填写故障描述')
@@ -701,11 +664,6 @@ const submitRepair = () => {
   if (!repairForm.value.contactPhone) {
     ElMessage.warning('请填写联系电话')
     return
-  }
-
-  // 如果有录音中，先停止
-  if (isRecording.value) {
-    stopRecording()
   }
 
   // 获取当前客户信息
@@ -720,51 +678,32 @@ const submitRepair = () => {
   let warrantyStatus = 'unknown'
   if (deviceInfo.value?.warrantyEndDate) {
     const warrantyEnd = new Date(deviceInfo.value.warrantyEndDate)
-    warrantyStatus = warrantyEnd > new Date() ? 'in' : 'out'
+    warrantyStatus = warrantyEnd > new Date() ? 'in_warranty' : 'out_of_warranty'
   }
 
-  // 生成唯一客户ID（如果本地存储中没有，使用序列号作为标识）
   const customerId = customerInfo.id || deviceInfo.value?.serialNumber || `guest_${Date.now()}`
-  const customerName = customerInfo.name || deviceInfo.value?.customerName || '匿名客户'
+  const customerName = repairForm.value.customerName || deviceInfo.value?.customerName || '匿名客户'
 
-  // 使用新的工单流程创建工单
   const workorder = createWorkorder({
     customerId: customerId,
     customerName: customerName,
+    customerContact: repairForm.value.contactPerson,
     customerPhone: repairForm.value.contactPhone,
     deviceModel: deviceInfo.value?.model || repairForm.value.model,
     serialNumber: deviceInfo.value?.serialNumber || repairForm.value.serialNumber,
     faultDescription: repairForm.value.description,
     urgency: repairForm.value.urgency,
+    subType: repairForm.value.subType || 'repair',
     attachments: repairForm.value.attachments,
     warrantyStatus: warrantyStatus,
     warrantyEndDate: deviceInfo.value?.warrantyEndDate,
-    address: deviceInfo.value?.installAddress || ''
-  })
+    address: repairForm.value.address || deviceInfo.value?.installAddress || ''
+  }, 'customer', repairForm.value.contactPerson || customerName)
 
   if (workorder) {
     ElMessage.success('报修申请已提交，我们会尽快与您联系')
     showRepairDialog.value = false
-
-    // 添加新工单到本地列表（用于显示）
-    workorders.value.unshift({
-      id: workorder.id,
-      workorderId: workorder.workorderId,
-      type: 'repair',
-      description: repairForm.value.description,
-      status: workorder.status,
-      createTime: new Date(workorder.createTime),
-      engineer: '',
-      solution: ''
-    })
-
-    // 重置表单
-    repairForm.value.description = ''
-    repairForm.value.urgency = 'medium'
-    repairForm.value.attachments = []
-
-    // 可选：跳转到工单列表页面
-    // router.push('/customer-workorder-list')
+    loadWorkorders()
   } else {
     ElMessage.error('提交报修申请失败，请重试')
   }
@@ -774,11 +713,29 @@ onMounted(() => {
   // 从路由参数获取设备序列号
   const serialNumber = route.query.serial
 
-  // 模拟加载设备数据
+  // 从 assetStore 查找设备数据
   if (serialNumber) {
-    deviceInfo.value = {
-      ...mockDeviceData,
-      serialNumber: serialNumber
+    const asset = getAssetBySerialNumber(serialNumber)
+    if (asset) {
+      deviceInfo.value = {
+        serialNumber: asset.serialNumber,
+        model: asset.name ? `${asset.name} ${asset.model}` : asset.model,
+        manufactureDate: asset.manufactureDate || '',
+        saleDate: asset.saleDate || '',
+        warrantyEndDate: asset.warrantyEndDate || '',
+        status: asset.status || '运行中',
+        isEL: asset.isEL || false,
+        installAddress: asset.installAddress || '',
+        customerName: asset.customerName || '',
+        contactPerson: asset.contactPerson || '',
+        contactPhone: asset.contactPhone || ''
+      }
+    } else {
+      // assetStore中没找到，用mock数据兜底
+      deviceInfo.value = {
+        ...mockDeviceData,
+        serialNumber: serialNumber
+      }
     }
   } else {
     deviceInfo.value = mockDeviceData
@@ -790,8 +747,11 @@ onMounted(() => {
   // 初始化报修表单
   repairForm.value.serialNumber = deviceInfo.value.serialNumber
   repairForm.value.model = deviceInfo.value.model
+  repairForm.value.customerName = deviceInfo.value.customerName
+  repairForm.value.address = deviceInfo.value.installAddress
   repairForm.value.contactPerson = deviceInfo.value.contactPerson
   repairForm.value.contactPhone = deviceInfo.value.contactPhone
+  repairForm.value.warrantyStatus = deviceInfo.value.warrantyEndDate && new Date(deviceInfo.value.warrantyEndDate) > new Date() ? 'in_warranty' : 'out_of_warranty'
 
   // 加载工单数据
   loadWorkorders()
@@ -1232,6 +1192,64 @@ onMounted(() => {
   font-size: 14px;
   color: #595959;
   line-height: 1.8;
+}
+
+/* 报修分区样式 */
+.repair-section {
+  margin-bottom: 8px;
+}
+
+.repair-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+  padding: 8px 0 8px 12px;
+  border-left: 3px solid #fa8c16;
+}
+
+.fault-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 8px 12px;
+}
+
+.tag-label {
+  font-size: 13px;
+  color: #909399;
+}
+
+.fault-tag {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.fault-tag:hover {
+  color: #fa8c16;
+  border-color: #fa8c16;
+}
+
+.type-radio-group {
+  width: 100%;
+}
+
+.type-radio-group :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.type-radio-group :deep(.el-radio-button__inner) {
+  width: 100%;
+}
+
+.repair-footer {
+  display: flex;
+  gap: 15px;
+  width: 100%;
+}
+
+.repair-footer .el-button {
+  flex: 1;
 }
 
 /* 响应式适配 */

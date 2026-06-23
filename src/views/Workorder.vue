@@ -193,6 +193,11 @@
               <el-form-item label="电话">
                 <el-input v-model="form.customerPhone" disabled placeholder="选择客户后自动带入" />
               </el-form-item>
+              <el-form-item label="联系人">
+                <el-select v-model="form.customerContactId" style="width: 100%" placeholder="请选择联系人" @change="onFormContactChange">
+                  <el-option v-for="c in customerContacts" :key="c.id" :label="`${c.name}（${c.position}）`" :value="c.id" />
+                </el-select>
+              </el-form-item>
               <el-form-item label="地址" class="form-item-full">
                 <el-input v-model="form.customerAddress" disabled placeholder="选择客户后自动带入" />
               </el-form-item>
@@ -337,7 +342,7 @@
 
         <el-tabs class="detail-tabs">
           <el-tab-pane label="基本信息">
-            <!-- 基本信息卡片 -->
+            <!-- 工单信息卡片 -->
             <el-card class="section-card" shadow="hover">
               <template #header>
                 <div class="card-header">
@@ -348,7 +353,7 @@
               <div class="info-grid">
                 <div class="info-item">
                   <span class="label">工单号</span>
-                  <span class="value">{{ selectedWorkorder.id }}</span>
+                  <span class="value">{{ selectedWorkorder.workorderId || selectedWorkorder.id }}</span>
                 </div>
                 <div class="info-item">
                   <span class="label">类型</span>
@@ -356,58 +361,263 @@
                     {{ getCategoryText(selectedWorkorder) }}
                   </el-tag>
                 </div>
-                <div class="info-item">
-                  <span class="label">客户名称</span>
-                  <span class="value">{{ selectedWorkorder.customerName }}</span>
-                </div>
-                <div class="info-item">
-                  <span class="label">设备序列号</span>
-                  <span class="value">{{ selectedWorkorder.assetSerialNumber || '-' }}</span>
+                <div class="info-item" v-if="selectedWorkorder.subType">
+                  <span class="label">子类型</span>
+                  <span class="value">{{ getSubTypeText(selectedWorkorder.subType) }}</span>
                 </div>
                 <div class="info-item">
                   <span class="label">状态</span>
-                  <el-tag :type="getFlowStatusType(selectedWorkorder.flowStatus)" size="small">
-                    {{ getFlowStatusText(selectedWorkorder.flowStatus) }}
+                  <el-tag :type="getFlowStatusType(selectedWorkorder.status)" size="small">
+                    {{ getFlowStatusText(selectedWorkorder.status) }}
                   </el-tag>
                 </div>
                 <div class="info-item">
-                  <span class="label">指派工程师</span>
-                  <span class="value">{{ selectedWorkorder.assignEngineer || '-' }}</span>
+                  <span class="label">紧急程度</span>
+                  <el-tag :type="selectedWorkorder.urgency === 'high' ? 'danger' : selectedWorkorder.urgency === 'low' ? 'info' : 'warning'" size="small">
+                    {{ selectedWorkorder.urgency === 'high' ? '紧急' : selectedWorkorder.urgency === 'low' ? '一般' : '普通' }}
+                  </el-tag>
+                </div>
+                <div class="info-item">
+                  <span class="label">创建人</span>
+                  <span class="value">{{ selectedWorkorder.createdBy?.name || selectedWorkorder.customerName || '-' }}</span>
                 </div>
                 <div class="info-item">
                   <span class="label">创建时间</span>
                   <span class="value">{{ formatDateTime(selectedWorkorder.createTime) }}</span>
                 </div>
-                <div class="info-item">
-                  <span class="label">完成时间</span>
-                  <span class="value">{{ selectedWorkorder.finishTime || '-' }}</span>
-                </div>
-                <!-- 配件销售工单特有字段 -->
-                <template v-if="selectedWorkorder.category === 'parts_sales'">
-                  <div class="info-item">
-                    <span class="label">总采购金额</span>
-                    <span class="value purchase">¥{{ formatAmount(selectedWorkorder.totalCostAmount) }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="label">总销售金额</span>
-                    <span class="value amount">¥{{ formatAmount(selectedWorkorder.totalSaleAmount) }}</span>
-                  </div>
-                  <div class="info-item">
-                    <span class="label">总利润率</span>
-                    <span class="value">{{ selectedWorkorder.totalProfitMargin }}%</span>
-                  </div>
-                </template>
-              </div>
-              
-              <!-- 工单描述 -->
-              <div class="description-section">
-                <div class="section-label">工单描述</div>
-                <div class="content-box">{{ selectedWorkorder.description || '暂无描述' }}</div>
               </div>
             </el-card>
-            
+
+            <!-- 客户信息卡片 -->
+            <el-card class="section-card" shadow="hover">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><User /></el-icon>
+                  <span>客户信息</span>
+                </div>
+              </template>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">客户名称</span>
+                  <span class="value">{{ selectedWorkorder.customerName }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">负责人</span>
+                  <span class="value">{{ selectedWorkorder.customerContact || '-' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">电话</span>
+                  <span class="value">{{ selectedWorkorder.customerPhone || '-' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">地址</span>
+                  <span class="value">{{ selectedWorkorder.address || '-' }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.customerFax">
+                  <span class="label">传真</span>
+                  <span class="value">{{ selectedWorkorder.customerFax }}</span>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 设备信息卡片 -->
+            <el-card class="section-card" shadow="hover">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><Monitor /></el-icon>
+                  <span>设备信息</span>
+                </div>
+              </template>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">设备型号</span>
+                  <span class="value">{{ selectedWorkorder.deviceModel || '-' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">序列号</span>
+                  <span class="value">{{ selectedWorkorder.serialNumber || selectedWorkorder.assetSerialNumber || '-' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">保修状态</span>
+                  <span class="value">{{ selectedWorkorder.warrantyStatus === 'in' ? '保内' : selectedWorkorder.warrantyStatus === 'out' ? '保外' : '未知' }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.warrantyEndDate">
+                  <span class="label">保修截止</span>
+                  <span class="value">{{ selectedWorkorder.warrantyEndDate }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.installDate">
+                  <span class="label">安装日期</span>
+                  <span class="value">{{ selectedWorkorder.installDate }}</span>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 故障描述卡片 -->
+            <el-card class="section-card" shadow="hover">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><Warning /></el-icon>
+                  <span>故障描述</span>
+                </div>
+              </template>
+              <div class="description-section">
+                <div class="content-box">{{ selectedWorkorder.faultDescription || selectedWorkorder.description || '暂无描述' }}</div>
+              </div>
+              <div v-if="selectedWorkorder.attachments && selectedWorkorder.attachments.length > 0" style="margin-top:12px;">
+                <div class="section-label">附件</div>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                  <el-tag v-for="(att, idx) in selectedWorkorder.attachments" :key="idx" type="info" size="small">
+                    {{ att.name || att.fileName || `附件${idx+1}` }}
+                  </el-tag>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 分配信息卡片（分配后显示） -->
+            <el-card class="section-card" shadow="hover" v-if="selectedWorkorder.engineerName && selectedWorkorder.status !== 'pending_assign'">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><UserFilled /></el-icon>
+                  <span>分配信息</span>
+                </div>
+              </template>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">工程师</span>
+                  <span class="value">{{ selectedWorkorder.engineerName }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.engineerPhone">
+                  <span class="label">工程师电话</span>
+                  <span class="value">{{ selectedWorkorder.engineerPhone }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.assignTime">
+                  <span class="label">分配时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.assignTime) }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.assignedEngineers && selectedWorkorder.assignedEngineers.length > 1">
+                  <span class="label">协同人员</span>
+                  <span class="value">
+                    <el-tag v-for="eng in selectedWorkorder.assignedEngineers.filter(e => e.id !== selectedWorkorder.engineerId)" :key="eng.id" size="small" style="margin-right:4px;">{{ eng.name }}</el-tag>
+                  </span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.workContent">
+                  <span class="label">工作内容</span>
+                  <span class="value" style="white-space:pre-wrap">{{ selectedWorkorder.workContent }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.workStartTime">
+                  <span class="label">工作开始时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.workStartTime) }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.workEndTime">
+                  <span class="label">预定完成时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.workEndTime) }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.vehicle">
+                  <span class="label">用车安排</span>
+                  <span class="value">{{ vehicleTextPC(selectedWorkorder.vehicle) }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.acceptTime">
+                  <span class="label">接单时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.acceptTime) }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.completeTime">
+                  <span class="label">完工时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.completeTime) }}</span>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 服务报告卡片（待签字及之后显示） -->
+            <el-card class="section-card" shadow="hover" v-if="selectedWorkorder.serviceReport && ['pending_sign','techlead_confirm','assistant_confirm','completed'].includes(selectedWorkorder.status)">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><Document /></el-icon>
+                  <span>服务报告</span>
+                </div>
+              </template>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">作业内容</span>
+                  <span class="value" style="white-space:pre-wrap">{{ selectedWorkorder.serviceReport.workContent || selectedWorkorder.serviceReport.repairContent || '-' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">处理过程</span>
+                  <span class="value" style="white-space:pre-wrap">{{ selectedWorkorder.serviceReport.repairProcess || '-' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">更换配件</span>
+                  <span class="value">{{ (selectedWorkorder.serviceReport.replacedParts || []).join('、') || '无' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">处理结果</span>
+                  <span class="value" style="white-space:pre-wrap">{{ selectedWorkorder.serviceReport.testResult || '-' }}</span>
+                </div>
+              </div>
+            </el-card>
+
+            <!-- 签字确认卡片（待签字及之后显示） -->
+            <el-card class="section-card" shadow="hover" v-if="selectedWorkorder.status === 'pending_sign' || selectedWorkorder.signTime">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><EditPen /></el-icon>
+                  <span>签字确认</span>
+                </div>
+              </template>
+              <div class="info-grid">
+                <div class="info-item" v-if="selectedWorkorder.signTime">
+                  <span class="label">签字时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.signTime) }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.techLeadConfirmTime">
+                  <span class="label">课长确认时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.techLeadConfirmTime) }}</span>
+                </div>
+                <div class="info-item" v-if="selectedWorkorder.assistantConfirmTime">
+                  <span class="label">业务确认时间</span>
+                  <span class="value">{{ formatDateTime(selectedWorkorder.assistantConfirmTime) }}</span>
+                </div>
+              </div>
+              <div style="display:flex;gap:24px;margin-top:12px;flex-wrap:wrap;">
+                <div v-if="selectedWorkorder.customerSign" class="sign-preview-pc">
+                  <span class="label" style="display:block;margin-bottom:6px;color:#909399;font-size:13px;">客户签字</span>
+                  <img :src="selectedWorkorder.customerSign" style="max-width:200px;max-height:80px;border:1px solid #ebeef5;border-radius:4px;" />
+                </div>
+                <div v-if="selectedWorkorder.engineerSign" class="sign-preview-pc">
+                  <span class="label" style="display:block;margin-bottom:6px;color:#909399;font-size:13px;">工程师签字</span>
+                  <img :src="selectedWorkorder.engineerSign" style="max-width:200px;max-height:80px;border:1px solid #ebeef5;border-radius:4px;" />
+                </div>
+              </div>
+              <div v-if="!selectedWorkorder.customerSign && !selectedWorkorder.engineerSign && selectedWorkorder.status === 'pending_sign'" style="color:#e6a23c;font-size:13px;margin-top:8px;">
+                等待签字
+              </div>
+            </el-card>
+
+            <!-- 配件销售工单特有字段 -->
+            <el-card class="section-card" shadow="hover" v-if="selectedWorkorder.category === 'parts_sales'">
+              <template #header>
+                <div class="card-header">
+                  <el-icon><Money /></el-icon>
+                  <span>配件销售</span>
+                </div>
+              </template>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">总采购金额</span>
+                  <span class="value purchase">¥{{ formatAmount(selectedWorkorder.totalCostAmount) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">总销售金额</span>
+                  <span class="value amount">¥{{ formatAmount(selectedWorkorder.totalSaleAmount) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">总利润率</span>
+                  <span class="value">{{ selectedWorkorder.totalProfitMargin }}%</span>
+                </div>
+              </div>
+            </el-card>
+
             <!-- 作业报告书PDF下载区域 -->
-            <el-card v-if="selectedWorkorder.reportPDF" class="section-card" shadow="hover">
+            <el-card v-if="selectedWorkorder.reportPdf" class="section-card" shadow="hover">
               <template #header>
                 <div class="card-header">
                   <el-icon><Document /></el-icon>
@@ -437,15 +647,14 @@
             </el-card>
           </el-tab-pane>
           
-          <el-tab-pane label="工单流转">
-            <el-card class="section-card" shadow="hover" v-if="selectedWorkorder">
-              <el-steps :active="getCurrentStepIndex(selectedWorkorder.status)" finish-status="success" align-center :space="120">
-                <el-step v-for="s in WorkorderFlowSteps" :key="s.key" :title="s.title" />
+          <el-tab-pane label="处理记录">
+            <!-- 流程进度条 -->
+            <el-card class="section-card flow-steps-card" shadow="hover" v-if="selectedWorkorder">
+              <el-steps :active="getCurrentStepIndex(selectedWorkorder.status)" finish-status="success" align-center>
+                <el-step v-for="s in WorkorderFlowSteps" :key="s.key" :title="s.title" :description="s.description" />
               </el-steps>
             </el-card>
-          </el-tab-pane>
-          
-          <el-tab-pane label="处理记录">
+            <!-- 处理记录时间线 -->
             <el-card class="section-card" shadow="hover">
               <template #header>
                 <div class="card-header">
@@ -457,7 +666,7 @@
                 <el-timeline-item
                   v-for="(record, index) in selectedWorkorder.processRecords"
                   :key="index"
-                  :timestamp="record.time"
+                  :timestamp="formatDateTime(record.time)"
                 >
                   <div class="timeline-content">
                     <h4 class="timeline-title">{{ record.title }}</h4>
@@ -567,30 +776,6 @@
             </el-card>
           </el-tab-pane>
 
-          <el-tab-pane label="PDF报告">
-            <el-card class="section-card" shadow="hover">
-              <template #header>
-                <div class="card-header">
-                  <el-icon><Document /></el-icon>
-                  <span>PDF报告</span>
-                </div>
-              </template>
-              <div class="pdf-container">
-                <el-button type="primary" @click="handleGeneratePDF">
-                  <el-icon><Plus /></el-icon>
-                  生成PDF报告
-                </el-button>
-                <el-button type="success" @click="handleViewPDF">
-                  <el-icon><View /></el-icon>
-                  查看PDF报告
-                </el-button>
-                <el-button type="info" @click="handleSendPDF">
-                  <el-icon><Message /></el-icon>
-                  发送PDF报告
-                </el-button>
-              </div>
-            </el-card>
-          </el-tab-pane>
         </el-tabs>
       </div>
     </el-dialog>
@@ -690,6 +875,19 @@
           </el-form-item>
           <el-form-item label="工作内容">
             <el-input v-model="assignFormData.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+            <div class="work-content-tags">
+              <span class="tags-label">快捷填入：</span>
+              <el-tag
+                v-for="tag in workContentTags"
+                :key="tag"
+                class="work-tag"
+                :effect="isTagSelected(tag) ? 'dark' : 'plain'"
+                :type="isTagSelected(tag) ? 'primary' : ''"
+                @click="toggleWorkTag(tag)"
+              >
+                {{ tag }}
+              </el-tag>
+            </div>
           </el-form-item>
           <el-form-item label="工作开始时间">
             <el-date-picker
@@ -744,7 +942,7 @@
 <script>
 import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Plus, Tools, OfficeBuilding, Clock, InfoFilled, Box, Document, View, Download, PriceTag, Message, Check, Close, Upload, Delete, EditPen, Collection } from '@element-plus/icons-vue'
+import { Plus, Tools, OfficeBuilding, Clock, InfoFilled, Box, Document, View, Download, PriceTag, Message, Check, Close, Upload, Delete, EditPen, Collection, User, UserFilled, Monitor, Warning, Money } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ConfigurableTable from '../components/ConfigurableTable.vue'
 import QuotationViewDialog from '../components/QuotationViewDialog.vue'
@@ -757,6 +955,7 @@ import {
   approveWorkorderQuotation
 } from '../stores/quotationStore.js'
 import { WorkorderCategory, WorkorderCategoryText, WorkorderSubType, WorkorderSubTypeText, WorkorderStatus, WorkorderStatusText, WorkorderStatusType, WorkorderFlowSteps, getCurrentStepIndex, getFlowStatusText, getFlowStatusType, state as workorderFlowState, createNotification, createWorkorder, saveToStorage, rejectWorkorder, assignWorkorder, acceptWorkorder, completeWorkorder, techLeadConfirm as doTechLeadConfirm, assistantConfirm as doAssistantConfirm, canAssignWorkorder, canAcceptWorkorder, canRejectWorkorder, canSubmitForSign, canSignWorkorder, canTechLeadConfirm, canAssistantConfirm, canCompleteDirectly, engineerList } from '../stores/workorderFlowStore.js'
+import { getContactsByCompanyId } from '../stores/contactStore.js'
 
 export default {
   name: 'Workorder',
@@ -778,6 +977,11 @@ export default {
     Delete,
     EditPen,
     Collection,
+    User,
+    UserFilled,
+    Monitor,
+    Warning,
+    Money,
     ConfigurableTable,
     QuotationViewDialog,
   },
@@ -831,6 +1035,7 @@ export default {
       { prop: 'customerName', label: '客户公司', minWidth: 150, sortable: true },
       { prop: 'assetSerialNumber', label: '设备序列号', width: 150, sortable: true },
       { prop: 'flowStatus', label: '流转状态', width: 120, sortable: true, slot: true },
+      { prop: 'createdByName', label: '创建人', width: 100, sortable: true },
       { prop: 'createTime', label: '创建时间', width: 180, sortable: true, slot: true },
       { prop: 'assignEngineer', label: '指派工程师', width: 120, sortable: true }
     ]
@@ -851,9 +1056,16 @@ export default {
     // 获取工单类型标签类型（兼容旧引用）
     const getWorkorderTypeTag = (category) => category === 'installation' ? 'success' : 'warning'
 
+    // 排序状态
+    const sortProp = ref('createTime')
+    const sortOrder = ref('descending')
+
     // 处理排序变化
     const handleSortChange = ({ prop, order }) => {
-      console.log('排序', prop, order)
+      if (prop) {
+        sortProp.value = prop
+        sortOrder.value = order || 'ascending'
+      }
     }
     const form = reactive({
       id: '',
@@ -861,6 +1073,8 @@ export default {
       subType: 'repair',
       customerId: '',
       customerPhone: '',
+      customerContact: '',
+      customerContactId: '',
       customerAddress: '',
       assetModel: '',
       assetSerialNumber: '',
@@ -880,13 +1094,27 @@ export default {
       if (customer) {
         form.customerPhone = customer.phone || ''
         form.customerAddress = customer.address || ''
+        form.customerContactId = ''
+        form.customerContact = ''
       } else {
         form.customerPhone = ''
         form.customerAddress = ''
+        form.customerContactId = ''
+        form.customerContact = ''
       }
       form.assetModel = ''
       form.assetSerialNumber = ''
       form.warrantyStatus = ''
+    }
+
+    const onFormContactChange = (contactId) => {
+      const contacts = customerContacts.value
+      const contact = contacts.find(c => c.id === contactId)
+      if (contact) {
+        form.customerContact = contact.name
+        form.customerContactId = contact.id
+        form.customerPhone = contact.phone || form.customerPhone
+      }
     }
 
     // SN选择变化时，自动带入保修状态和型号
@@ -955,19 +1183,24 @@ export default {
     }
 
     const customers = ref([
-      { id: 'cust_001', name: '上海某机械有限公司', phone: '021-55551234', address: '上海市浦东新区张江高科技园区XX路88号', contactPerson: '张经理' },
-      { id: 'cust_002', name: '北京某设备制造有限公司', phone: '010-66667890', address: '北京市朝阳区望京科技园YY路12号', contactPerson: '李总' },
-      { id: 'cust_003', name: '广州某工业设备有限公司', phone: '020-77773456', address: '广州市黄埔区开发区ZZ路56号', contactPerson: '王工' }
+      { id: 'C001', name: '上海某机械有限公司', phone: '021-55551234', address: '上海市浦东新区张江高科技园区XX路88号' },
+      { id: 'C002', name: '北京某设备制造有限公司', phone: '010-66667890', address: '北京市朝阳区望京科技园YY路12号' },
+      { id: 'C003', name: '广州某工业设备有限公司', phone: '020-77773456', address: '广州市黄埔区开发区ZZ路56号' }
     ])
 
+    const customerContacts = computed(() => {
+      if (!form.customerId) return []
+      return getContactsByCompanyId(form.customerId).filter(c => c.approvalStatus === '已通过')
+    })
+
     const assets = ref([
-      { id: 'asset_001', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN001', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-03-15', installDate: '2025-03-15' },
-      { id: 'asset_002', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN002', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-01-10', installDate: '2024-01-10' },
-      { id: 'asset_003', customerId: 'cust_001', model: 'LASER-B200', serialNumber: 'SN003', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-06-20', installDate: '2025-06-20' },
-      { id: 'asset_004', customerId: 'cust_002', model: 'PRESS-C300', serialNumber: 'SN004', warrantyStatus: 'expired', warrantyExpiry: '2025-02-01', installDate: '2023-02-01' },
-      { id: 'asset_005', customerId: 'cust_002', model: 'CNC-A100', serialNumber: 'SN005', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-09-01', installDate: '2025-09-01' },
-      { id: 'asset_006', customerId: 'cust_003', model: 'LASER-B200', serialNumber: 'SN006', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-12-01', installDate: '2025-12-01' },
-      { id: 'asset_007', customerId: 'cust_003', model: 'PRESS-C300', serialNumber: 'SN007', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-04-15', installDate: '2024-04-15' }
+      { id: 'asset_001', customerId: 'C001', model: 'CNC-A100', serialNumber: 'SN001', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-03-15', installDate: '2025-03-15' },
+      { id: 'asset_002', customerId: 'C001', model: 'CNC-A100', serialNumber: 'SN002', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-01-10', installDate: '2024-01-10' },
+      { id: 'asset_003', customerId: 'C001', model: 'LASER-B200', serialNumber: 'SN003', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-06-20', installDate: '2025-06-20' },
+      { id: 'asset_004', customerId: 'C002', model: 'PRESS-C300', serialNumber: 'SN004', warrantyStatus: 'expired', warrantyExpiry: '2025-02-01', installDate: '2023-02-01' },
+      { id: 'asset_005', customerId: 'C002', model: 'CNC-A100', serialNumber: 'SN005', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-09-01', installDate: '2025-09-01' },
+      { id: 'asset_006', customerId: 'C003', model: 'LASER-B200', serialNumber: 'SN006', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-12-01', installDate: '2025-12-01' },
+      { id: 'asset_007', customerId: 'C003', model: 'PRESS-C300', serialNumber: 'SN007', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-04-15', installDate: '2024-04-15' }
     ])
 
     const WarrantyStatusText = { in_warranty: '保内', out_of_warranty: '保外', expired: '过保' }
@@ -1017,10 +1250,10 @@ export default {
     const filteredWorkorders = computed(() => {
       const source = workorderFlowState.workorders
       let list = [...source]
-        .sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
         .map(w => ({
           id: w.workorderId || w.id,
           rawId: w.id,
+          type: w.category === 'installation' ? '安装工单' : '服务工单',
           category: w.category || 'service',
           subType: w.subType || 'repair',
           customerName: w.customerName || '',
@@ -1035,12 +1268,30 @@ export default {
           warrantyStatus: w.warrantyStatus,
           processRecords: w.processRecords || [],
           createdBy: w.createdBy || { role: 'customer', name: w.customerName },
+          createdByName: (w.createdBy && w.createdBy.name) || w.customerName || '未知',
           partsList: w.partsList || [],
           totalCostAmount: w.totalCostAmount || 0,
           totalSaleAmount: w.totalSaleAmount || 0,
           totalProfitMargin: w.totalProfitMargin || 0,
           reportPdf: w.reportPdf
         }))
+        .sort((a, b) => {
+          const prop = sortProp.value
+          const order = sortOrder.value
+          let va = a[prop]
+          let vb = b[prop]
+          // 时间字段用日期比较
+          if (prop === 'createTime') {
+            va = va ? new Date(va).getTime() : 0
+            vb = vb ? new Date(vb).getTime() : 0
+          }
+          // 空值放最后
+          if (va == null && vb == null) return 0
+          if (va == null) return 1
+          if (vb == null) return -1
+          const cmp = typeof va === 'string' ? va.localeCompare(vb, 'zh') : va - vb
+          return order === 'ascending' ? cmp : -cmp
+        })
 
       // 工程师不展示待分配工单
       if (currentUserRole.value === 'engineer') {
@@ -1213,6 +1464,8 @@ export default {
         form.subType = rawWo.subType || 'repair'
         form.customerId = customer ? customer.id : (rawWo.customerId || '')
         form.customerPhone = rawWo.customerPhone || (customer ? customer.phone : '')
+        form.customerContact = rawWo.customerContact || ''
+        form.customerContactId = rawWo.customerContactId || ''
         form.customerAddress = rawWo.address || (customer ? customer.address : '')
         form.assetModel = rawWo.deviceModel || ''
         form.assetSerialNumber = rawWo.serialNumber || ''
@@ -1245,38 +1498,24 @@ export default {
 
     const handleViewWorkorder = (row) => {
       console.log('handleViewWorkorder row:', { id: row.id, rawId: row.rawId, type: row.type })
-      // 模拟数据
+      // 从原始数据源获取完整工单数据
+      const rawId = row.rawId || row.id
+      const fullWorkorder = workorderFlowState.workorders.find(w => w.id === rawId) || {}
       selectedWorkorder.value = {
-        ...row,
-        description: '设备出现故障，需要维修',
-        finishTime: row.flowStatus === 'completed' ? '2026-02-02 16:00:00' : '',
-        flowStatus: row.flowStatus || WorkorderStatus.PENDING_ASSIGN,
-        // 模拟报告数据（实际应从后端获取）
-        report: row.report || {
-          reportNo: 'SR' + row.id,
-          serviceDate: '2026-02-01',
-          faultDescription: '设备运行异常，出现异响和振动',
-          solution: '更换轴承，调整皮带张力，清洁散热器',
-          parts: [
-            { name: '轴承', model: '6205-2RS', quantity: 2 },
-            { name: '皮带', model: 'B-1200', quantity: 1 }
-          ],
-          result: '已修复',
-          remark: '建议定期保养'
-        },
-        processRecords: row.processRecords || [
-          { time: '2026-02-01 10:00:00', title: '工单创建', content: '客服创建维修工单', operator: '客服小王' },
-          { time: '2026-02-01 10:30:00', title: '工单分配', content: '分配给王工程师', operator: '调度员' },
-          { time: '2026-02-01 14:00:00', title: '开始维修', content: '工程师到达现场开始维修', operator: '王工程师' },
-          { time: '2026-02-02 16:00:00', title: '维修完成', content: '设备故障已修复', operator: '王工程师' }
-        ],
-        partsList: row.partsList || [],
-        totalCostAmount: 0,
-        totalSaleAmount: 0,
-        totalProfitMargin: 0
+        ...fullWorkorder,
+        // 保留列表中的计算字段
+        rawId: row.rawId || row.id,
+        type: row.type,
+        flowStatus: fullWorkorder.status || row.flowStatus || WorkorderStatus.PENDING_ASSIGN,
+        finishTime: row.flowStatus === 'completed' ? (fullWorkorder.assistantConfirmTime || '') : '',
+        processRecords: fullWorkorder.processRecords || row.processRecords || [],
+        partsList: fullWorkorder.partsList || row.partsList || [],
+        totalCostAmount: fullWorkorder.totalCostAmount || 0,
+        totalSaleAmount: fullWorkorder.totalSaleAmount || 0,
+        totalProfitMargin: fullWorkorder.totalProfitMargin || 0
       }
       // 加载该工单的报价记录（使用原始ID查询关联数据）
-      loadWorkorderQuotations(row.rawId || row.id)
+      loadWorkorderQuotations(rawId)
       detailVisible.value = true
     }
 
@@ -1318,24 +1557,25 @@ export default {
       if (!workorder || !workorder.flowStatus) return []
       const role = currentUserRole.value
       const uid = currentUserId.value
+      const status = workorder.flowStatus
       const actions = []
 
-      if (canAssignWorkorder(role, workorder)) {
+      if (status === 'pending_assign' && canAssignWorkorder(role, workorder)) {
         actions.push({ key: 'assign', label: '分配工程师', type: 'primary' })
       }
-      if (canAcceptWorkorder(role, workorder, uid)) {
+      if (status === 'pending_accept' && canAcceptWorkorder(role, workorder, uid)) {
         actions.push({ key: 'accept', label: '接单', type: 'success' })
       }
-      if (canRejectWorkorder(role, workorder, uid)) {
+      if (status === 'pending_accept' && canRejectWorkorder(role, workorder, uid)) {
         actions.push({ key: 'reject', label: '弃单', type: 'danger' })
       }
-      if (canSubmitForSign(role, workorder, uid)) {
+      if (status === 'processing' && canSubmitForSign(role, workorder, uid)) {
         actions.push({ key: 'complete', label: '完成', type: 'success' })
       }
-      if (canTechLeadConfirm(role)) {
+      if (status === 'techlead_confirm' && canTechLeadConfirm(role)) {
         actions.push({ key: 'tlConfirm', label: '课长确认', type: 'primary' })
       }
-      if (canAssistantConfirm(role)) {
+      if (status === 'assistant_confirm' && canAssistantConfirm(role)) {
         actions.push({ key: 'asstConfirm', label: '业务确认', type: 'primary' })
       }
       return actions
@@ -1500,19 +1740,13 @@ export default {
         }
       }
       
-      // 处理PDF保存（独立处理，不依赖工单状态更新）
+      // 处理PDF保存
       if (action === 'saveReportPDF' && data) {
         const index = workorders.value.findIndex(w => w.id === workorder.id || w.workorderId === workorder.id)
         if (index !== -1) {
-          workorders.value[index].reportPDF = {
-            signImage: data.signImage,
-            pdfDataUrl: data.pdfDataUrl,
-            generatedAt: data.generatedAt,
-            fileName: `作业报告书_${workorder.id}_${new Date().toISOString().split('T')[0]}.html`
-          }
-          selectedWorkorder.value.reportPDF = { ...workorders.value[index].reportPDF }
-          saveToStorage()
-          ElMessage.success('作业报告书PDF已保存到工单')
+          workorders.value[index].reportPdf = data.pdfDataUrl || data
+          selectedWorkorder.value.reportPdf = workorders.value[index].reportPdf
+          workorderFlowState.saveReportPdf(workorder.id, data.pdfDataUrl || data)
         }
         return
       }
@@ -1571,6 +1805,24 @@ export default {
       vehicle: 'self'
     })
 
+    const workContentTags = [
+      '设备维修', '故障诊断', '配件更换', '设备调试', '试加工测试',
+      '设备改造', '操作培训', '定期保养', '检修巡检', '技术指导'
+    ]
+
+    const toggleWorkTag = (tag) => {
+      const current = assignFormData.workContent || ''
+      if (current.includes(tag)) {
+        assignFormData.workContent = current.replace(new RegExp(tag + '(、)?'), '').replace(/、$/, '').replace(/^、/, '')
+      } else {
+        assignFormData.workContent = current ? current + '、' + tag : tag
+      }
+    }
+
+    const isTagSelected = (tag) => {
+      return (assignFormData.workContent || '').includes(tag)
+    }
+
     const getCategoryTextByCode = (cat) => {
       const map = { installation: '安装工单', service: '服务工单' }
       return map[cat] || cat
@@ -1586,6 +1838,11 @@ export default {
     const getWarrantyTagType = (ws) => {
       const map = { in_warranty: 'success', out_of_warranty: 'warning', expired: 'danger', unknown: 'info' }
       return map[ws] || 'info'
+    }
+
+    const vehicleTextPC = (v) => {
+      const map = { self: '自用车', company: '公司车', public: '公共交通' }
+      return map[v] || v || '-'
     }
 
     const handleQuickAssign = (row) => {
@@ -1686,6 +1943,7 @@ export default {
             customerId: form.customerId,
             customerName: customer ? customer.name : '未知',
             customerPhone: form.customerPhone || '',
+            customerContact: form.customerContact || '',
             address: form.customerAddress || '',
             deviceModel: form.assetModel || '',
             serialNumber: form.assetSerialNumber || '',
@@ -2308,6 +2566,7 @@ export default {
       quotationViewVisible,
       currentQuotation,
       customers,
+      customerContacts,
       assets,
       filteredWorkorders,
       tableColumns,
@@ -2325,6 +2584,7 @@ export default {
       getCategoryText,
       onFormCategoryChange,
       onFormCustomerChange,
+      onFormContactChange,
       onFormSNChange,
       onFaultTagClick,
       WarrantyStatusText,
@@ -2351,10 +2611,14 @@ export default {
       selectedEngineerIds,
       assignWorkorderData,
       assignFormData,
+      workContentTags,
+      toggleWorkTag,
+      isTagSelected,
       getCategoryTextByCode,
       getSubTypeText,
       getWarrantyText,
       getWarrantyTagType,
+      vehicleTextPC,
       confirmAssign,
       engineerList,
       handleQuickAccept,
@@ -2399,6 +2663,7 @@ export default {
       rejectQuotationLocal,
       updateWorkorderStatusForQuotation,
       WorkorderStatus,
+      WorkorderFlowSteps,
       getCurrentStepIndex,
       getFlowStatusText,
       getFlowStatusType,
@@ -2570,6 +2835,32 @@ export default {
 /* 区域卡片样式 */
 .section-card {
   margin-bottom: 20px;
+}
+
+.flow-steps-card {
+  margin-bottom: 20px;
+}
+.flow-steps-card :deep(.el-card__body) {
+  padding: 24px 20px;
+  overflow-x: auto;
+}
+.flow-steps-card :deep(.el-step__title) {
+  font-size: 13px;
+}
+.flow-steps-card :deep(.el-step__description) {
+  font-size: 11px;
+}
+.flow-steps-card :deep(.el-step__head.is-process .el-step__icon) {
+  background-color: #e6a23c;
+  border-color: #e6a23c;
+  color: #fff;
+}
+.flow-steps-card :deep(.el-step__title.is-process) {
+  color: #e6a23c;
+  font-weight: 600;
+}
+.flow-steps-card :deep(.el-step__description.is-process) {
+  color: #e6a23c;
 }
 
 .section-card :deep(.el-card__header) {
@@ -3774,5 +4065,23 @@ export default {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.work-content-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tags-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.work-tag {
+  cursor: pointer;
+  user-select: none;
 }
 </style>

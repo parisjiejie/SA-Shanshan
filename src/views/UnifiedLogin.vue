@@ -155,7 +155,7 @@ const roles = [
     icon: 'OfficeBuilding',
     color: '#409eff',
     tagType: 'primary',
-    redirect: '/staff-mobile-workspace'
+    redirect: '/workorder?type=service'
   },
   {
     key: 'assistant',
@@ -166,7 +166,7 @@ const roles = [
     icon: 'User',
     color: '#67c23a',
     tagType: 'success',
-    redirect: '/dashboard'
+    redirect: '/workorder?type=service'
   },
   {
     key: 'engineer',
@@ -205,13 +205,15 @@ const roles = [
   {
     key: 'customer',
     name: '客户',
-    mockName: '王客户',
+    mockName: '张经理',
     account: 'customer',
     desc: '工单查询、报价确认',
     icon: 'UserFilled',
     color: '#909399',
     tagType: 'info',
-    redirect: '/customer-workspace'
+    redirect: '/customer-workspace',
+    companyName: '上海某机械有限公司',
+    companyId: 'C001'
   }
 ]
 
@@ -236,13 +238,15 @@ const handleLogin = async () => {
     // 保存登录状态
     const displayName = role.mockName || role.name
     const userInfo = {
-      id: role.key === 'customer' ? 'C001' : (role.key === 'admin' ? 'admin_001' : role.account),
+      id: role.key === 'customer' ? (role.companyId || 'C001') : (role.key === 'admin' ? 'admin_001' : role.account),
       username: role.account,
       name: displayName,
       role: role.key,
       roleName: role.name,
       department: role.key === 'customer' ? '' : '技术服务部',
       subDepartment: role.subDepartment || '',
+      companyName: role.companyName || '',
+      companyId: role.companyId || '',
       loginTime: new Date().toISOString()
     }
 

@@ -84,56 +84,30 @@ import {
   Calendar,
   ArrowRight
 } from '@element-plus/icons-vue'
+import { getAssetsByCompanyId } from '../stores/assetStore'
 
 const router = useRouter()
 
-// 设备列表数据
-const devices = ref([
-  {
-    id: 1,
-    name: '激光切割机',
-    model: 'LX-3000',
-    serialNumber: 'SN2024001001',
-    status: 'running',
-    location: 'A车间',
-    purchaseDate: new Date('2024-01-15'),
-    lastMaintenance: new Date('2024-03-15'),
-    nextMaintenance: new Date('2024-06-15')
-  },
-  {
-    id: 2,
-    name: '数控折弯机',
-    model: 'ZW-1500',
-    serialNumber: 'SN2024001002',
-    status: 'running',
-    location: 'B车间',
-    purchaseDate: new Date('2024-02-20'),
-    lastMaintenance: new Date('2024-04-20'),
-    nextMaintenance: new Date('2024-07-20')
-  },
-  {
-    id: 3,
-    name: '激光焊接机',
-    model: 'HJ-2000',
-    serialNumber: 'SN2024001003',
-    status: 'warning',
-    location: 'A车间',
-    purchaseDate: new Date('2023-08-10'),
-    lastMaintenance: new Date('2024-01-10'),
-    nextMaintenance: new Date('2024-04-10')
-  },
-  {
-    id: 4,
-    name: '数控冲床',
-    model: 'CC-800',
-    serialNumber: 'SN2024001004',
-    status: 'stopped',
-    location: 'C车间',
-    purchaseDate: new Date('2023-05-05'),
-    lastMaintenance: new Date('2024-02-05'),
-    nextMaintenance: new Date('2024-05-05')
-  }
-])
+// 从 assetStore 按客户公司ID获取设备
+const devices = computed(() => {
+  let companyId = ''
+  try {
+    const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+    companyId = auth.companyId || auth.id || ''
+  } catch (e) {}
+  if (!companyId) return []
+  return getAssetsByCompanyId(companyId).map((a, index) => ({
+    id: index + 1,
+    name: a.name || a.model,
+    model: a.model,
+    serialNumber: a.serialNumber,
+    status: a.status === '运行中' ? 'running' : a.status === '停机' ? 'stopped' : a.status === '维修中' ? 'warning' : 'error',
+    location: a.installAddress || '',
+    purchaseDate: a.installDate ? new Date(a.installDate) : null,
+    lastMaintenance: null,
+    nextMaintenance: null
+  }))
+})
 
 // 运行中设备数量
 const runningDevices = computed(() => {

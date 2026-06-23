@@ -20,6 +20,17 @@ const routes = [
     meta: { public: true }
   },
   {
+    path: '/product-library',
+    name: 'ProductLibrary',
+    component: () => import('../views/ProductLibrary.vue')
+  },
+  {
+    path: '/customer-product-detail',
+    name: 'CustomerProductDetail',
+    component: () => import('../views/CustomerProductDetail.vue'),
+    meta: { public: true }
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('../views/Dashboard.vue')
@@ -106,6 +117,12 @@ const routes = [
     path: '/asset-detail',
     name: 'AssetDetail',
     component: () => import('../views/AssetDetail.vue'),
+    meta: { public: true }
+  },
+  {
+    path: '/scan-result',
+    name: 'ScanResult',
+    component: () => import('../views/ScanResult.vue'),
     meta: { public: true }
   },
   {
@@ -301,12 +318,12 @@ const router = createRouter({
 
 // 角色权限配置
 const rolePermissions = {
-  admin: ['/', '/dashboard', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/user-approval', '/quotation', '/quotation-item-query', '/report-template', '/employee', '/organization', '/workflow-config', '/field-config', '/field-designer', '/field-template-manager', '/customer-field-config', '/team-management', '/team-statistics', '/member-detail', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-workorder-create', '/staff-field-checkin-list', '/staff-checkin', '/staff-profile', '/staff-profile-desktop'],
-  assistant: ['/', '/dashboard', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/quotation', '/quotation-item-query', '/report-template', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-workorder-create', '/staff-field-checkin-list', '/staff-checkin', '/staff-profile', '/staff-profile-desktop'],
-  engineer: ['/', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-field-checkin-list', '/staff-checkin', '/staff-profile', '/staff-profile-desktop', '/field-service', '/parts', '/qrcode', '/scan'],
-  techLead: ['/', '/dashboard', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/quotation', '/quotation-item-query', '/report-template', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-profile', '/staff-profile-desktop'],
-  director: ['/', '/dashboard', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/quotation', '/quotation-item-query', '/report-template', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-profile', '/staff-profile-desktop'],
-  customer: ['/', '/customer-workspace', '/customer-workorder-list', '/customer-workorder-detail', '/customer-profile', '/customer-device-list', '/asset-detail', '/customer-quotation-sign', '/customer-dashboard']
+  admin: ['/', '/dashboard', '/product-library', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/user-approval', '/quotation', '/quotation-item-query', '/report-template', '/employee', '/organization', '/workflow-config', '/field-config', '/field-designer', '/field-template-manager', '/customer-field-config', '/team-management', '/team-statistics', '/member-detail', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-workorder-create', '/staff-field-checkin-list', '/staff-checkin', '/staff-profile', '/staff-profile-desktop'],
+  assistant: ['/', '/dashboard', '/product-library', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/quotation', '/quotation-item-query', '/report-template', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-workorder-create', '/staff-field-checkin-list', '/staff-checkin', '/staff-profile', '/staff-profile-desktop'],
+  engineer: ['/', '/product-library', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-field-checkin-list', '/staff-checkin', '/staff-profile', '/staff-profile-desktop', '/field-service', '/parts', '/qrcode', '/scan'],
+  techLead: ['/', '/dashboard', '/product-library', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/quotation', '/quotation-item-query', '/report-template', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-profile', '/staff-profile-desktop'],
+  director: ['/', '/dashboard', '/product-library', '/customer', '/asset', '/workorder', '/field-service', '/parts', '/qrcode', '/scan', '/contact', '/quotation', '/quotation-item-query', '/report-template', '/staff-mobile-workspace', '/staff-workorder-list', '/staff-workorder-detail', '/staff-profile', '/staff-profile-desktop'],
+  customer: ['/', '/product-library', '/customer-product-detail', '/customer-workspace', '/customer-workorder-list', '/customer-workorder-detail', '/customer-profile', '/customer-device-list', '/asset-detail', '/customer-quotation-sign', '/customer-dashboard']
 }
 
 // 获取当前用户角色
@@ -369,11 +386,11 @@ router.beforeEach((to, from, next) => {
     ElMessage.warning('您没有权限访问该页面')
     // 根据角色跳转到对应首页
     const roleHomePage = {
-      admin: '/dashboard',
-      assistant: '/dashboard',
+      admin: '/workorder?type=service',
+      assistant: '/workorder?type=service',
       engineer: '/staff-mobile-workspace',
-      techLead: '/dashboard',
-      director: '/dashboard',
+      techLead: '/workorder?type=service',
+      director: '/workorder?type=service',
       customer: '/customer-workspace'
     }
     return next(roleHomePage[currentRole] || '/login')

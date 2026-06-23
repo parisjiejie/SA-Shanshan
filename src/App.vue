@@ -21,21 +21,9 @@
               router
               @select="handleMenuSelect"
             >
-              <el-menu-item v-if="isMenuVisible('/dashboard')" index="/dashboard">
-                <el-icon><PieChart /></el-icon>
-                <span>工作台</span>
-              </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/bi-dashboard')" index="/bi-dashboard">
                 <el-icon><DataLine /></el-icon>
                 <span>BI大屏</span>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/customer')" index="/customer">
-                <el-icon><User /></el-icon>
-                <span>客户管理</span>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/asset')" index="/asset">
-                <el-icon><Monitor /></el-icon>
-                <span>设备管理</span>
               </el-menu-item>
               <el-sub-menu v-if="isMenuVisible('workorder')" index="workorder">
                 <template #title>
@@ -49,20 +37,28 @@
                   <span>服务工单</span>
                 </el-menu-item>
               </el-sub-menu>
+              <el-menu-item v-if="isMenuVisible('/customer')" index="/customer">
+                <el-icon><User /></el-icon>
+                <span>客户管理</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/contact')" index="/contact">
+                <el-icon><Phone /></el-icon>
+                <span>联系人管理</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/asset')" index="/asset">
+                <el-icon><Monitor /></el-icon>
+                <span>设备管理</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/product-library')" index="/product-library">
+                <el-icon><Goods /></el-icon>
+                <span>产品库</span>
+              </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/field-service')" index="/field-service">
                 <el-icon><Location /></el-icon>
                 <div class="menu-item-content">
                   <span>外勤管理</span>
                   <el-badge v-if="pendingApprovalCount > 0" :value="pendingApprovalBadge" class="menu-badge" type="danger" />
                 </div>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/parts')" index="/parts">
-                <el-icon><Box /></el-icon>
-                <span>配件管理</span>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/contact')" index="/contact">
-                <el-icon><Phone /></el-icon>
-                <span>联系人管理</span>
               </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/user-approval')" index="/user-approval">
                 <el-icon><CircleCheck /></el-icon>
@@ -89,10 +85,6 @@
               <el-menu-item v-if="isMenuVisible('/qrcode')" index="/qrcode">
                 <el-icon><Document /></el-icon>
                 <span>二维码管理</span>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/scan')" index="/scan">
-                <el-icon><Camera /></el-icon>
-                <span>机器扫码</span>
               </el-menu-item>
               <el-sub-menu v-if="isMenuVisible('system')" index="system">
                 <template #title>
@@ -142,21 +134,9 @@
               router
               @select="handleMobileMenuSelect"
             >
-              <el-menu-item v-if="isMenuVisible('/dashboard')" index="/dashboard">
-                <el-icon><PieChart /></el-icon>
-                <span>工作台</span>
-              </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/bi-dashboard')" index="/bi-dashboard">
                 <el-icon><DataLine /></el-icon>
                 <span>BI大屏</span>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/customer')" index="/customer">
-                <el-icon><User /></el-icon>
-                <span>客户管理</span>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/asset')" index="/asset">
-                <el-icon><Monitor /></el-icon>
-                <span>设备管理</span>
               </el-menu-item>
               <el-sub-menu v-if="isMenuVisible('workorder')" index="workorder">
                 <template #title>
@@ -173,18 +153,26 @@
                   <span>配件销售</span>
                 </el-menu-item>
               </el-sub-menu>
-              <el-menu-item v-if="isMenuVisible('/field-service')" index="/field-service">
-                <el-icon><Location /></el-icon>
-                <span>外勤管理</span>
-                <el-badge v-if="pendingApprovalCount > 0" :value="pendingApprovalBadge" class="menu-badge" type="danger" />
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/parts')" index="/parts">
-                <el-icon><Box /></el-icon>
-                <span>配件管理</span>
+              <el-menu-item v-if="isMenuVisible('/customer')" index="/customer">
+                <el-icon><User /></el-icon>
+                <span>客户管理</span>
               </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/contact')" index="/contact">
                 <el-icon><Phone /></el-icon>
                 <span>联系人管理</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/asset')" index="/asset">
+                <el-icon><Monitor /></el-icon>
+                <span>设备管理</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/product-library')" index="/product-library">
+                <el-icon><Goods /></el-icon>
+                <span>产品库</span>
+              </el-menu-item>
+              <el-menu-item v-if="isMenuVisible('/field-service')" index="/field-service">
+                <el-icon><Location /></el-icon>
+                <span>外勤管理</span>
+                <el-badge v-if="pendingApprovalCount > 0" :value="pendingApprovalBadge" class="menu-badge" type="danger" />
               </el-menu-item>
               <el-menu-item v-if="isMenuVisible('/user-approval')" index="/user-approval">
                 <el-icon><CircleCheck /></el-icon>
@@ -206,10 +194,6 @@
               <el-menu-item v-if="isMenuVisible('/qrcode')" index="/qrcode">
                 <el-icon><Document /></el-icon>
                 <span>二维码管理</span>
-              </el-menu-item>
-              <el-menu-item v-if="isMenuVisible('/scan')" index="/scan">
-                <el-icon><Camera /></el-icon>
-                <span>机器扫码</span>
               </el-menu-item>
               <el-sub-menu v-if="isMenuVisible('system')" index="system">
                 <template #title>
@@ -338,7 +322,7 @@ import { ElMessage } from 'element-plus'
 import { 
   PieChart, User, Monitor, Document, Location, Box, 
   Setting, ArrowDown, Menu, Phone, CircleCheck, Money, Search, DocumentChecked, Camera,
-  Cellphone, Monitor as MonitorIcon, Bell, DataLine
+  Cellphone, Monitor as MonitorIcon, Bell, DataLine, Goods
 } from '@element-plus/icons-vue'
 import { pendingApprovalCount } from './stores/approvalStore'
 import { pendingApprovalCount as pendingUserApprovalCount } from './stores/userApprovalStore'
@@ -368,12 +352,13 @@ export default {
     Cellphone,
     MonitorIcon,
     Bell,
+    Goods,
     NotificationPanel
   },
   setup() {
     const router = useRouter()
     const route = useRoute()
-    const activeMenu = ref('/dashboard')
+    const activeMenu = ref('/bi-dashboard')
     const viewRefreshKey = ref(0)
     const isSidebarOpen = ref(false)
     const showNotifications = ref(false)
@@ -395,7 +380,15 @@ export default {
     
     // 判断是否客户页面
     const isCustomerPage = computed(() => {
-      return route.path.startsWith('/customer-') || route.meta?.requiresCustomerAuth
+      if (route.path.startsWith('/customer-') || route.meta?.requiresCustomerAuth) return true
+      // 客户角色访问产品库和产品详情时也使用客户布局（无侧边栏）
+      if (route.path === '/product-library' || route.path === '/customer-product-detail') {
+        try {
+          const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+          if (auth.role === 'customer') return true
+        } catch (e) {}
+      }
+      return false
     })
 
     // 判断是否需要显示设备切换按钮（工程师、课长和部长需要）
@@ -421,20 +414,18 @@ export default {
     // 角色菜单权限配置
     const roleMenus = {
       admin: [
-        '/dashboard',
         '/bi-dashboard',
-        '/customer',
-        '/asset',
         'workorder',
-        '/field-service',
-        '/parts',
+        '/customer',
         '/contact',
+        '/asset',
+        '/product-library',
+        '/field-service',
         '/user-approval',
         '/quotation',
         '/quotation-item-query',
         '/report-template',
         '/qrcode',
-        '/scan',
         'system',
         '/organization',
         '/employee',
@@ -446,70 +437,69 @@ export default {
         '/customer-field-config'
       ],
       sales: [
-        '/dashboard',
-        '/customer',
-        '/asset',
+        '/bi-dashboard',
         'workorder',
-        '/parts',
+        '/customer',
         '/contact',
+        '/asset',
+        '/product-library',
         '/quotation',
         '/quotation-item-query',
         '/qrcode'
       ],
       assistant: [
-        '/dashboard',
         '/bi-dashboard',
-        '/customer',
-        '/asset',
         'workorder',
-        '/field-service',
-        '/parts',
+        '/customer',
         '/contact',
+        '/asset',
+        '/product-library',
+        '/field-service',
+        '/user-approval',
         '/quotation',
         '/quotation-item-query',
         '/report-template',
-        '/qrcode',
-        '/scan'
+        '/qrcode'
       ],
       engineer: [
-        '/dashboard',
-        '/customer',
-        '/asset',
+        '/bi-dashboard',
         'workorder',
-        '/field-service',
-        '/parts',
-        '/scan'
+        '/customer',
+        '/contact',
+        '/asset',
+        '/product-library',
+        '/field-service'
       ],
       techLead: [
-        '/dashboard',
         '/bi-dashboard',
-        '/customer',
-        '/asset',
         'workorder',
-        '/field-service',
-        '/parts',
+        '/customer',
         '/contact',
+        '/asset',
+        '/product-library',
+        '/field-service',
+        '/user-approval',
         '/quotation',
         '/quotation-item-query',
         '/report-template',
         '/qrcode'
       ],
       director: [
-        '/dashboard',
         '/bi-dashboard',
-        '/customer',
-        '/asset',
         'workorder',
-        '/field-service',
-        '/parts',
+        '/customer',
         '/contact',
+        '/asset',
+        '/product-library',
+        '/field-service',
+        '/user-approval',
         '/quotation',
         '/quotation-item-query',
         '/report-template',
         '/qrcode'
       ],
       customer: [
-        '/dashboard',
+        '/product-library',
         'workorder'
       ]
     }
@@ -588,12 +578,12 @@ export default {
 
     // 各角色的首页配置
     const roleHomePages = {
-      customer: { desktop: '/dashboard', mobile: '/customer-workspace' },
-      engineer: { desktop: '/dashboard', mobile: '/staff-mobile-workspace' },
-      techLead: { desktop: '/dashboard', mobile: '/staff-mobile-workspace' },
-      admin: { desktop: '/dashboard', mobile: '/staff-mobile-workspace' },
-      assistant: { desktop: '/dashboard', mobile: '/staff-mobile-workspace' },
-      director: { desktop: '/dashboard', mobile: '/staff-mobile-workspace' }
+      customer: { desktop: '/customer-workspace', mobile: '/customer-workspace' },
+      engineer: { desktop: '/bi-dashboard', mobile: '/staff-mobile-workspace' },
+      techLead: { desktop: '/workorder?type=service', mobile: '/staff-mobile-workspace' },
+      admin: { desktop: '/workorder?type=service', mobile: '/staff-mobile-workspace' },
+      assistant: { desktop: '/workorder?type=service', mobile: '/staff-mobile-workspace' },
+      director: { desktop: '/workorder?type=service', mobile: '/staff-mobile-workspace' }
     }
 
     const toggleDeviceView = () => {
@@ -677,7 +667,8 @@ export default {
       notificationUnreadCount,
       Bell,
       Cellphone,
-      MonitorIcon
+      MonitorIcon,
+      Goods
     }
   }
 }

@@ -5,6 +5,7 @@
  */
 
 import { reactive, toRaw } from 'vue'
+import jsPDF from 'jspdf'
 import { addNotification, NotificationType } from './notificationStore'
 
 // ==================== 工单类型枚举 ====================
@@ -61,6 +62,7 @@ export const WorkorderStatusType = {
 }
 
 export const WorkorderFlowSteps = [
+  { key: 'created', title: '工单创建', description: '工单已创建' },
   { key: 'pending_assign', title: '待分配', description: '课长分配工程师' },
   { key: 'pending_accept', title: '待接单', description: '工程师接单' },
   { key: 'processing', title: '进行中', description: '工程师处理' },
@@ -73,7 +75,7 @@ export const WorkorderFlowSteps = [
 // ==================== 状态管理 ====================
 const state = reactive({ workorders: [], notifications: [] })
 
-const MOCK_DATA_VERSION = 3 // 修改 mock 数据后递增此版本号
+const MOCK_DATA_VERSION = 4 // 修改 mock 数据后递增此版本号
 
 const loadFromStorage = () => {
   try {
@@ -139,7 +141,7 @@ const createWorkorder = (data, creatorRole, creatorName) => {
     status: WorkorderStatus.PENDING_ASSIGN,
     createTime: new Date().toISOString(),
     updateTime: new Date().toISOString(),
-    createdBy: data.createdBy || { id: '', role: creatorRole || 'customer', name: creatorName || data.customerName || '未知' },
+    createdBy: data.createdBy || { id: '', role: creatorRole || 'customer', name: creatorName || data.customerContact || data.customerName || '未知' },
     // 客户
     customerId: data.customerId, customerName: data.customerName,
     customerPhone: data.customerPhone, customerContact: data.customerContact || '',
@@ -449,7 +451,7 @@ const getAssistantNotifications = () => state.notifications.filter(n => n.target
 
 const getFlowStatusText = (s) => WorkorderStatusText[s] || s
 const getFlowStatusType = (s) => WorkorderStatusType[s] || 'info'
-const getCurrentStepIndex = (s) => ['pending_assign','pending_accept','processing','pending_sign','techlead_confirm','assistant_confirm','completed'].indexOf(s)
+const getCurrentStepIndex = (s) => ['created','pending_assign','pending_accept','processing','pending_sign','techlead_confirm','assistant_confirm','completed'].indexOf(s)
 
 const getAvailableActions = (status) => ({
   'pending_assign': ['assign'], 'pending_accept': ['accept', 'reject'],
@@ -506,8 +508,41 @@ const initMockData = (force = false) => {
     if (force) state.workorders = []
     const now = Date.now(); const h = (n) => new Date(now - n*3600000).toISOString()
 
+    // 生成演示用 PDF（不含真实签名，仅作展示）
+    const generateDemoPdf = (w) => {
+      try {
+        const pdf = new jsPDF()
+        pdf.setFontSize(18)
+        pdf.text('服务报告书', 105, 20, { align: 'center' })
+        pdf.setFontSize(12)
+        pdf.text(`报告书 No.: ${w.workorderId}`, 14, 40)
+        pdf.text(`客户名称: ${w.customerName}`, 14, 50)
+        pdf.text(`设备型号: ${w.deviceModel}`, 14, 60)
+        pdf.text(`序列号: ${w.serialNumber}`, 14, 70)
+        pdf.text(`故障描述: ${w.faultDescription}`, 14, 80)
+        if (w.serviceReport) {
+          pdf.text(`作业内容: ${w.serviceReport.workContent || ''}`, 14, 95)
+          pdf.text(`处理过程: ${w.serviceReport.repairProcess || ''}`, 14, 105)
+          pdf.text(`更换配件: ${(w.serviceReport.replacedParts || []).join('、') || '无'}`, 14, 115)
+          pdf.text(`处理结果: ${w.serviceReport.testResult || ''}`, 14, 125)
+        }
+        pdf.text('签字确认:', 14, 145)
+        if (w.customerSign) pdf.text('客户已签字确认', 14, 155)
+        pdf.text(`工程师: ${w.engineerName || ''}`, 14, 165)
+        pdf.text(`生成时间: ${new Date().toLocaleString('zh-CN')}`, 14, 175)
+        return pdf.output('datauristring')
+      } catch (e) {
+        return 'data:application/pdf;base64,'
+      }
+    }
+
     const pushMock = (id, wid, cat, sub, status, cTime, uTime, createdBy, custName, custPhone, model, serial, fault, urgency, warranty, wEnd, addr, records, engId, engName, engPhone, aTime, acTime, coTime, siTime, tlTime, asTime, sr, cs, es, pdf, qid) => {
-      state.workorders.push({ id, workorderId: wid, category: cat, subType: sub, status, createTime: cTime, updateTime: uTime, createdBy, customerId: 'C001', customerName: custName, customerPhone: custPhone, customerContact: '', customerFax: '', deviceModel: model, serialNumber: serial, faultDescription: fault, urgency, attachments: [], warrantyStatus: warranty, warrantyEndDate: wEnd, installDate: '', address: addr, techLeadRole: 'techLead', techLeadName: sub ? SUBTYPE_TECHLEAD_MAP[sub].name : '', processRecords: records, engineerId: engId, engineerName: engName, engineerPhone: engPhone, assignTime: aTime, acceptTime: acTime, completeTime: coTime, signTime: siTime, techLeadConfirmTime: tlTime, assistantConfirmTime: asTime, serviceReport: sr, customerSign: cs, engineerSign: es, reportPdf: pdf, quotationId: qid, partsList: [], totalCostAmount: 0, totalSaleAmount: 0, totalProfitMargin: 0 })
+      const wo = { id, workorderId: wid, category: cat, subType: sub, status, createTime: cTime, updateTime: uTime, createdBy, customerId: 'C001', customerName: custName, customerPhone: custPhone, customerContact: '', customerFax: '', deviceModel: model, serialNumber: serial, faultDescription: fault, urgency, attachments: [], warrantyStatus: warranty, warrantyEndDate: wEnd, installDate: '', address: addr, techLeadRole: 'techLead', techLeadName: sub ? SUBTYPE_TECHLEAD_MAP[sub].name : '', processRecords: records, engineerId: engId, engineerName: engName, engineerPhone: engPhone, assignTime: aTime, acceptTime: acTime, completeTime: coTime, signTime: siTime, techLeadConfirmTime: tlTime, assistantConfirmTime: asTime, serviceReport: sr, customerSign: cs, engineerSign: es, reportPdf: pdf, quotationId: qid, partsList: [], totalCostAmount: 0, totalSaleAmount: 0, totalProfitMargin: 0 }
+      // 演示环境：有签字或服务报告但无PDF的已签字状态工单，自动生成演示PDF
+      if (!wo.reportPdf && (cs || sr) && [WorkorderStatus.PENDING_SIGN, WorkorderStatus.TECHLEAD_CONFIRM, WorkorderStatus.ASSISTANT_CONFIRM, WorkorderStatus.COMPLETED].includes(status)) {
+        wo.reportPdf = generateDemoPdf(wo)
+      }
+      state.workorders.push(wo)
     }
 
     pushMock('wo_001','WO20260608001','service','repair',WorkorderStatus.PENDING_ASSIGN,

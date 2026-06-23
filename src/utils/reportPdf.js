@@ -108,7 +108,7 @@ export function buildReportHtml(workorder, signImage, signRole) {
  * @returns {Promise<string>} PDF base64 data URL
  */
 export async function generateReportPdf(workorder, signImage, signRole) {
-  // 创建隐藏容器
+  // 先尝试 html2canvas 方案（带签名的精美PDF）
   const container = document.createElement('div')
   container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;'
   container.innerHTML = buildReportHtml(workorder, signImage, signRole)
@@ -123,11 +123,10 @@ export async function generateReportPdf(workorder, signImage, signRole) {
     })
     document.body.removeChild(container)
 
-    const imgWidth = 210 // A4 mm
+    const imgWidth = 210
     const imgHeight = (canvas.height * imgWidth) / canvas.width
     const pdf = new jsPDF('p', 'mm', 'a4')
 
-    // 分页处理
     const pageHeight = 297
     let position = 0
     let leftHeight = imgHeight
@@ -145,7 +144,36 @@ export async function generateReportPdf(workorder, signImage, signRole) {
     return pdf.output('datauristring')
   } catch (e) {
     if (container.parentNode) document.body.removeChild(container)
-    console.error('PDF生成失败:', e)
-    throw e
+    console.warn('html2canvas PDF生成失败，使用jsPDF备用方案:', e.message)
+    return generateFallbackPdf(workorder)
+  }
+}
+
+function generateFallbackPdf(wo) {
+  try {
+    const pdf = new jsPDF()
+    const sr = wo.serviceReport || {}
+    let y = 20
+    pdf.setFontSize(18)
+    pdf.text('服务报告书', 105, y, { align: 'center' })
+    y += 15
+    pdf.setFontSize(11)
+    pdf.text(`报告书 No.: ${wo.workorderId || ''}`, 14, y); y += 8
+    pdf.text(`客户名称: ${wo.customerName || ''}`, 14, y); y += 8
+    pdf.text(`设备型号: ${wo.deviceModel || ''}`, 14, y); y += 8
+    pdf.text(`序列号: ${wo.serialNumber || ''}`, 14, y); y += 8
+    pdf.text(`故障描述: ${wo.faultDescription || ''}`, 14, y); y += 10
+    if (sr.workContent || sr.repairContent) { pdf.text(`作业内容: ${sr.workContent || sr.repairContent}`, 14, y); y += 8 }
+    if (sr.repairProcess) { pdf.text(`处理过程: ${sr.repairProcess}`, 14, y); y += 8 }
+    if (sr.replacedParts && sr.replacedParts.length) { pdf.text(`更换配件: ${sr.replacedParts.join('、')}`, 14, y); y += 8 }
+    if (sr.testResult) { pdf.text(`处理结果: ${sr.testResult}`, 14, y); y += 10 }
+    pdf.text('签字确认:', 14, y); y += 8
+    pdf.text('客户已签字确认', 14, y); y += 8
+    if (wo.engineerName) { pdf.text(`工程师: ${wo.engineerName}`, 14, y); y += 8 }
+    pdf.text(`生成时间: ${new Date().toLocaleString('zh-CN')}`, 14, y)
+    return pdf.output('datauristring')
+  } catch (e) {
+    console.error('备用PDF生成也失败:', e)
+    return null
   }
 }

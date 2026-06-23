@@ -51,6 +51,14 @@
           <span class="action-label">配件购买</span>
           <span class="action-desc">购买原厂配件</span>
         </div>
+
+        <div class="action-item product" @click="openProductLibrary">
+          <div class="action-icon">
+            <el-icon><Goods /></el-icon>
+          </div>
+          <span class="action-label">产品库</span>
+          <span class="action-desc">山善全线产品</span>
+        </div>
       </div>
     </div>
 
@@ -123,14 +131,26 @@
           </div>
           <div class="card-footer">
             <span class="order-time">{{ formatDate(order.createTime) }}</span>
-            <el-button 
-              v-if="order.needsSign" 
-              type="primary" 
-              size="small"
-              @click.stop="handleSign(order)"
-            >
-              签字确认
-            </el-button>
+            <div class="card-footer-actions">
+              <el-button 
+                v-if="order.reportPdf" 
+                type="success" 
+                size="small"
+                link
+                @click.stop="previewWorkorderPdf(order)"
+              >
+                <el-icon><View /></el-icon>
+                PDF
+              </el-button>
+              <el-button 
+                v-if="order.needsSign" 
+                type="primary" 
+                size="small"
+                @click.stop="handleSign(order)"
+              >
+                签字确认
+              </el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -194,17 +214,22 @@
         </div>
 
         <div class="scan-input">
-          <p class="input-label">手动输入设备编号</p>
-          <el-input
+          <p class="input-label">手动选择设备编号</p>
+          <el-select
             v-model="scanDialog.manualInput"
-            placeholder="请输入设备序列号"
+            placeholder="请选择设备序列号"
             clearable
             size="large"
+            style="width: 100%"
           >
-            <template #append>
-              <el-button type="primary" @click="handleManualQuery">查询</el-button>
-            </template>
-          </el-input>
+            <el-option
+              v-for="asset in repairAssets"
+              :key="asset.serialNumber"
+              :label="`${asset.serialNumber}（${asset.model}）`"
+              :value="asset.serialNumber"
+            />
+          </el-select>
+          <el-button type="primary" @click="handleManualQuery" size="large" round style="margin-top: 16px; width: 100%">查询</el-button>
         </div>
       </div>
     </div>
@@ -344,7 +369,18 @@
               <el-input :model-value="repairDialog.form.customerName" readonly />
             </el-form-item>
             <el-form-item label="联系人">
-              <el-input v-model="repairDialog.form.customerContact" placeholder="联系人姓名" />
+              <el-select
+                v-model="repairDialog.form.customerContact"
+                placeholder="请选择联系人"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="c in repairCustomerContacts"
+                  :key="c.id"
+                  :label="`${c.name}（${c.position}）`"
+                  :value="c.name"
+                />
+              </el-select>
             </el-form-item>
             <el-form-item label="联系电话">
               <el-input v-model="repairDialog.form.customerPhone" placeholder="联系电话" />
@@ -445,6 +481,35 @@
               </el-tag>
             </div>
           </el-form>
+          <!-- 故障附件：照片/视频 -->
+          <div class="fault-attachments">
+            <div class="attachment-actions">
+              <el-button type="primary" plain size="small" @click="pickRepairPhoto">
+                <el-icon><Picture /></el-icon> 拍照/照片
+              </el-button>
+              <el-button type="success" plain size="small" @click="pickRepairVideo">
+                <el-icon><VideoCamera /></el-icon> 视频
+              </el-button>
+            </div>
+            <div class="attachment-preview-list" v-if="repairDialog.attachments.length">
+              <div
+                v-for="(att, idx) in repairDialog.attachments"
+                :key="idx"
+                class="attachment-item"
+              >
+                <img v-if="att.type === 'image'" :src="att.url" class="att-thumb" @click="previewImage(att.url)" />
+                <div v-else-if="att.type === 'video'" class="att-video-thumb" @click="playRepairVideo(att.url)">
+                  <el-icon class="play-icon"><VideoCamera /></el-icon>
+                  <span>视频</span>
+                </div>
+                <el-icon class="att-remove" @click="removeRepairAttachment(idx)"><Close /></el-icon>
+              </div>
+            </div>
+            <p class="attachment-tip">支持上传故障照片和视频，帮助工程师更快定位问题</p>
+          </div>
+          <!-- 隐藏的文件输入 -->
+          <input ref="repairPhotoInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onRepairPhotoSelected" />
+          <input ref="repairVideoInput" type="file" accept="video/*" style="display:none" @change="onRepairVideoSelected" />
         </div>
       </div>
       <template #footer>
@@ -548,6 +613,20 @@
       </div>
     </div>
 
+    <!-- PDF预览对话框 -->
+    <el-dialog
+      v-model="pdfDialog.visible"
+      title="服务报告书"
+      width="95%"
+      fullscreen
+      @close="onPdfDialogClose"
+    >
+      <iframe v-if="pdfDialog.url" :src="pdfDialog.url" style="width:100%;height:70vh;border:none;"></iframe>
+      <div style="text-align:center;margin-top:15px;">
+        <el-button type="primary" @click="downloadPdf">下载PDF</el-button>
+      </div>
+    </el-dialog>
+
     <!-- 消息通知对话框 -->
     <el-dialog
       v-model="messageDialog.visible"
@@ -625,7 +704,9 @@ import {
   Close,
   Plus,
   Picture,
-  VideoCamera
+  VideoCamera,
+  View,
+  Goods
 } from '@element-plus/icons-vue'
 import {
   getCustomerWorkorders,
@@ -633,6 +714,8 @@ import {
   WorkorderStatusType,
   state as workorderFlowState
 } from '../stores/workorderFlowStore.js'
+import { getContactsByCompanyId } from '../stores/contactStore.js'
+import { getAssetsByCompanyId, getAssetBySerialNumber, getAssetByQRToken, boundQRCodes, unboundQRCodes, bindQRCode } from '../stores/assetStore.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -640,8 +723,16 @@ const route = useRoute()
 // 客户信息
 const customerInfo = reactive({
   name: '张经理',
-  company: '某某科技有限公司'
+  company: '上海某机械有限公司'
 })
+// 从 staffAuth 初始化客户信息
+try {
+  const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+  if (auth.role === 'customer') {
+    customerInfo.name = auth.name || '张经理'
+    customerInfo.company = auth.companyName || '上海某机械有限公司'
+  }
+} catch (e) {}
 
 // 页面加载时检查URL参数 + 自动检测待签字工单
 onMounted(() => {
@@ -784,7 +875,12 @@ const loadWorkorders = () => {
     description: w.faultDescription,
     status: w.status,
     createTime: new Date(w.createTime),
-    needsSign: w.status === 'pending_sign'
+    needsSign: w.status === 'pending_sign',
+    reportPdf: w.reportPdf,
+    serviceReport: w.serviceReport,
+    customerName: w.customerName,
+    engineerName: w.engineerName,
+    serialNumber: w.serialNumber
   }))
 }
 
@@ -879,19 +975,29 @@ const repairDialog = reactive({
     assetSerialNumber: '',
     warrantyStatus: '',
     faultDescription: ''
-  }
+  },
+  attachments: [] // { type: 'image'|'video', url: base64DataUrl, name: string }
 })
+const repairPhotoInput = ref(null)
+const repairVideoInput = ref(null)
 
-// 设备数据（与 StaffWorkorderCreate 一致）
-const repairAssets = ref([
-  { id: 'asset_001', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN001', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-03-15' },
-  { id: 'asset_002', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN002', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-01-10' },
-  { id: 'asset_003', customerId: 'cust_001', model: 'LASER-B200', serialNumber: 'SN003', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-06-20' },
-  { id: 'asset_004', customerId: 'cust_002', model: 'PRESS-C300', serialNumber: 'SN004', warrantyStatus: 'expired', warrantyExpiry: '2025-02-01' },
-  { id: 'asset_005', customerId: 'cust_002', model: 'CNC-A100', serialNumber: 'SN005', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-09-01' },
-  { id: 'asset_006', customerId: 'cust_003', model: 'LASER-B200', serialNumber: 'SN006', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-12-01' },
-  { id: 'asset_007', customerId: 'cust_003', model: 'PRESS-C300', serialNumber: 'SN007', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-04-15' }
-])
+// 设备数据（从 assetStore 获取）
+const repairAssets = computed(() => {
+  let companyId = ''
+  try {
+    const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+    companyId = auth.companyId || auth.id || ''
+  } catch (e) {}
+  if (!companyId) return []
+  return getAssetsByCompanyId(companyId).map(a => ({
+    id: a.serialNumber,
+    customerId: a.companyId,
+    model: a.model,
+    serialNumber: a.serialNumber,
+    warrantyStatus: a.warrantyEndDate && new Date(a.warrantyEndDate) > new Date() ? 'in_warranty' : 'out_of_warranty',
+    warrantyExpiry: a.warrantyEndDate || ''
+  }))
+})
 
 const WarrantyStatusText = { in_warranty: '保内', out_of_warranty: '保外', expired: '过保' }
 const WarrantyStatusType = { in_warranty: 'success', out_of_warranty: 'warning', expired: 'danger' }
@@ -908,6 +1014,17 @@ const commonFaultTags = [
 const repairCustomerModels = computed(() => {
   if (!repairDialog.form.customerId) return []
   return [...new Set(repairAssets.value.filter(a => a.customerId === repairDialog.form.customerId).map(a => a.model))]
+})
+
+// 客户联系人列表（根据登录客户的companyId）
+const repairCustomerContacts = computed(() => {
+  let companyId = ''
+  try {
+    const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+    companyId = auth.companyId || auth.id || ''
+  } catch (e) {}
+  if (!companyId) return []
+  return getContactsByCompanyId(companyId).filter(c => c.approvalStatus === '已通过')
 })
 
 // 级联：客户+型号 → SN列表
@@ -976,6 +1093,12 @@ const signDialog = reactive({
 const signCanvas = ref(null)
 let isDrawing = false
 let ctx = null
+
+// PDF预览对话框
+const pdfDialog = reactive({
+  visible: false,
+  url: ''
+})
 
 // 方法
 const openScan = () => {
@@ -1055,15 +1178,28 @@ const stopScan = () => {
 
 // 开始扫描（模拟扫码成功）
 const startScanning = () => {
-  // 实际项目中这里应该使用二维码识别库（如 jsQR 或 @zxing/library）
-  // 这里模拟扫码成功，3秒后自动识别
+  // 模拟扫码成功，3秒后自动识别
   scanInterval = setTimeout(() => {
-    // 模拟扫码成功
-    const mockSerialNumber = 'SN' + Date.now().toString().slice(-8)
-    ElMessage.success('扫码成功')
-    stopScan()
-    scanDialog.visible = false
-    router.push(`/asset-detail?serial=${mockSerialNumber}`)
+    // 演示环境：直接跳到当前客户公司下的第一个设备
+    const customerAssets = repairAssets.value
+    if (customerAssets.length > 0) {
+      ElMessage.success('扫码成功')
+      stopScan()
+      scanDialog.visible = false
+      router.push(`/asset-detail?serial=${customerAssets[0].serialNumber}`)
+      return
+    }
+    // 兜底：从assetStore中找已绑定的二维码
+    const boundCodes = boundQRCodes.value
+    if (boundCodes.length > 0) {
+      const asset = getAssetByQRToken(boundCodes[0].token)
+      if (asset) {
+        ElMessage.success('扫码成功')
+        stopScan()
+        scanDialog.visible = false
+        router.push(`/asset-detail?serial=${asset.serialNumber}`)
+      }
+    }
   }, 3000)
 }
 
@@ -1078,14 +1214,18 @@ const handleScanResult = (result) => {
 }
 
 const handleManualQuery = () => {
-  if (!scanDialog.manualInput.trim()) {
-    ElMessage.warning('请输入设备编号')
+  if (!scanDialog.manualInput) {
+    ElMessage.warning('请选择设备编号')
+    return
+  }
+  // 从assetStore查找设备
+  const asset = getAssetBySerialNumber(scanDialog.manualInput)
+  if (!asset) {
+    ElMessage.warning('未找到该设备，请确认编号是否正确')
     return
   }
   scanDialog.visible = false
-  // 跳转到设备详情页
-  const serial = scanDialog.manualInput.trim()
-  router.push(`/asset-detail?serial=${serial}`)
+  router.push(`/asset-detail?serial=${asset.serialNumber}`)
 }
 
 const openChat = () => {
@@ -1265,12 +1405,14 @@ const createRepairOrder = () => {
   // 从 staffAuth 读取客户信息（统一登录存的是 staffAuth）
   let customerId = ''
   let customerName = ''
+  let customerContact = ''
   let customerPhone = ''
   let customerAddress = ''
   try {
     const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
-    customerId = auth.id || auth.userId || ''
-    customerName = auth.name || ''
+    customerId = auth.companyId || auth.id || ''
+    customerName = auth.companyName || ''
+    customerContact = auth.name || ''
     customerPhone = auth.phone || ''
   } catch (e) {
     console.error('读取客户信息失败:', e)
@@ -1280,7 +1422,7 @@ const createRepairOrder = () => {
     customerId,
     customerName,
     customerPhone,
-    customerContact: '',
+    customerContact,
     customerAddress,
     category: 'service',
     subType: 'repair',
@@ -1290,6 +1432,7 @@ const createRepairOrder = () => {
     warrantyStatus: '',
     faultDescription: ''
   }
+  repairDialog.attachments = []
   repairDialog.visible = true
 }
 
@@ -1312,17 +1455,93 @@ const submitRepairOrder = () => {
     category: repairDialog.form.category,
     subType: repairDialog.form.subType,
     urgency: repairDialog.form.urgency,
-    warrantyStatus: repairDialog.form.warrantyStatus || 'unknown'
-  }, 'customer', auth.name || repairDialog.form.customerName)
+    warrantyStatus: repairDialog.form.warrantyStatus || 'unknown',
+    attachments: repairDialog.attachments.map(a => ({ type: a.type, url: a.url, name: a.name }))
+  }, 'customer', repairDialog.form.customerContact || auth.name)
 
   ElMessage.success(`报修申请已提交，工单号 ${wo.workorderId}`)
   repairDialog.visible = false
   loadWorkorders()
 }
 
+// 报修附件：选择照片
+const pickRepairPhoto = () => {
+  if (repairPhotoInput.value) repairPhotoInput.value.click()
+}
+
+// 报修附件：选择视频
+const pickRepairVideo = () => {
+  if (repairVideoInput.value) repairVideoInput.value.click()
+}
+
+// 报修附件：照片选中
+const onRepairPhotoSelected = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  // 限制大小 10MB
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.warning('照片大小不能超过10MB')
+    event.target.value = ''
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    repairDialog.attachments.push({ type: 'image', url: e.target.result, name: file.name })
+  }
+  reader.readAsDataURL(file)
+  event.target.value = ''
+}
+
+// 报修附件：视频选中
+const onRepairVideoSelected = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  // 限制大小 50MB
+  if (file.size > 50 * 1024 * 1024) {
+    ElMessage.warning('视频大小不能超过50MB')
+    event.target.value = ''
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    repairDialog.attachments.push({ type: 'video', url: e.target.result, name: file.name })
+  }
+  reader.readAsDataURL(file)
+  event.target.value = ''
+}
+
+// 报修附件：删除
+const removeRepairAttachment = (idx) => {
+  repairDialog.attachments.splice(idx, 1)
+}
+
+// 报修附件：播放视频
+const playRepairVideo = (url) => {
+  const preview = document.createElement('div')
+  preview.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:9999;'
+  const video = document.createElement('video')
+  video.src = url
+  video.controls = true
+  video.autoplay = true
+  video.style.cssText = 'max-width:90%;max-height:80%;'
+  const closeBtn = document.createElement('div')
+  closeBtn.innerHTML = '✕'
+  closeBtn.style.cssText = 'position:absolute;top:20px;right:20px;color:white;font-size:30px;cursor:pointer;padding:10px;'
+  preview.appendChild(video)
+  preview.appendChild(closeBtn)
+  document.body.appendChild(preview)
+  const close = () => { video.pause(); document.body.removeChild(preview) }
+  closeBtn.onclick = close
+  preview.onclick = (e) => { if (e.target === preview) close() }
+}
+
 const createPartsOrder = () => {
   partsDialog.visible = true
   partsDialog.searchKeyword = ''
+}
+
+const openProductLibrary = () => {
+  router.push('/product-library')
 }
 
 const searchParts = () => {
@@ -1476,9 +1695,10 @@ const confirmSignature = async () => {
     
     if (wo) {
       try {
-        // 生成PDF
         const pdfBase64 = await generateReportPdf(wo, signatureData, 'customer')
-        saveReportPdf(wo.id, pdfBase64)
+        if (pdfBase64) {
+          saveReportPdf(wo.id, pdfBase64)
+        }
       } catch (e) {
         console.error('PDF生成失败:', e)
       }
@@ -1504,6 +1724,51 @@ const viewAllWorkorders = () => {
 
 const viewWorkorderDetail = (order) => {
   router.push(`/customer-workorder-detail?id=${order.id}`)
+}
+
+const previewWorkorderPdf = (order) => {
+  if (!order.reportPdf) {
+    ElMessage.warning('PDF不存在')
+    return
+  }
+  // 将 data URI 转为 Blob URL（手机浏览器不支持 iframe 渲染 data: URI）
+  try {
+    const dataUri = order.reportPdf
+    const base64Match = dataUri.match(/^data:application\/pdf;base64,(.+)$/)
+    if (base64Match) {
+      const binaryStr = atob(base64Match[1])
+      const bytes = new Uint8Array(binaryStr.length)
+      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
+      const blob = new Blob([bytes], { type: 'application/pdf' })
+      const blobUrl = URL.createObjectURL(blob)
+      pdfDialog.url = blobUrl
+      pdfDialog._blobUrl = blobUrl // 记录以便关闭时释放
+    } else {
+      pdfDialog.url = dataUri
+    }
+  } catch (e) {
+    console.error('PDF转换失败:', e)
+    pdfDialog.url = order.reportPdf
+  }
+  pdfDialog.visible = true
+}
+
+const onPdfDialogClose = () => {
+  if (pdfDialog._blobUrl) {
+    URL.revokeObjectURL(pdfDialog._blobUrl)
+    pdfDialog._blobUrl = null
+  }
+}
+
+const downloadPdf = () => {
+  if (!pdfDialog.url) return
+  const a = document.createElement('a')
+  a.href = pdfDialog.url
+  a.download = '服务报告书.pdf'
+  a.target = '_blank'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
 }
 
 const switchNav = (key) => {
@@ -2782,5 +3047,79 @@ onUnmounted(() => {
 
 .repair-footer .el-button {
   flex: 1;
+}
+
+/* 故障附件 */
+.fault-attachments {
+  margin-top: 12px;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.attachment-actions .el-button {
+  flex: 1;
+}
+
+.attachment-preview-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attachment-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e8e8e8;
+}
+
+.att-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  cursor: pointer;
+}
+
+.att-video-thumb {
+  width: 100%;
+  height: 100%;
+  background: #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #8c8c8c;
+  font-size: 12px;
+  gap: 4px;
+}
+
+.att-video-thumb .play-icon {
+  font-size: 24px;
+  color: #1890ff;
+}
+
+.att-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px;
+}
+
+.attachment-tip {
+  font-size: 12px;
+  color: #bfbfbf;
+  margin: 8px 0 0;
 }
 </style>

@@ -165,8 +165,15 @@ export default {
             }))
 
             ElMessage.success(`欢迎回来，${account.name}`)
-            // 使用 window.location.href 强制刷新页面，确保 App.vue 重新加载用户信息
-            window.location.href = '/dashboard'
+            // 根据角色跳转到对应首页
+            const roleHomeMap = {
+              admin: '/workorder?type=service',
+              assistant: '/workorder?type=service',
+              engineer: '/bi-dashboard',
+              techLead: '/bi-dashboard',
+              director: '/bi-dashboard'
+            }
+            window.location.href = roleHomeMap[account.role] || '/bi-dashboard'
           } else {
             ElMessage.error('用户名或密码错误')
           }

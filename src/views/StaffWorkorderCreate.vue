@@ -71,6 +71,21 @@
           <el-form-item label="联系电话">
             <el-input v-model="form.customerPhone" placeholder="选择客户后自动带入" readonly />
           </el-form-item>
+          <el-form-item label="联系人">
+            <el-select
+              v-model="form.customerContactId"
+              placeholder="请选择联系人"
+              style="width: 100%"
+              @change="onContactChange"
+            >
+              <el-option
+                v-for="c in customerContacts"
+                :key="c.id"
+                :label="`${c.name}（${c.position}）`"
+                :value="c.id"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="地址">
             <el-input v-model="form.customerAddress" type="textarea" :rows="2" placeholder="选择客户后自动带入" readonly />
           </el-form-item>
@@ -178,6 +193,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { createWorkorder } from '../stores/workorderFlowStore.js'
+import { getContactsByCompanyId } from '../stores/contactStore.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -191,20 +207,26 @@ const defaultCat = (routeType === 'installation') ? 'installation' : 'service'
 
 // 客户数据
 const customers = ref([
-  { id: 'cust_001', name: '上海某机械有限公司', phone: '021-55551234', address: '上海市浦东新区张江高科技园区XX路88号', contactPerson: '张经理' },
-  { id: 'cust_002', name: '北京某设备制造有限公司', phone: '010-66667890', address: '北京市朝阳区望京科技园YY路12号', contactPerson: '李总' },
-  { id: 'cust_003', name: '广州某工业设备有限公司', phone: '020-77773456', address: '广州市黄埔区开发区ZZ路56号', contactPerson: '王工' }
+  { id: 'C001', name: '上海某机械有限公司', phone: '021-55551234', address: '上海市浦东新区张江高科技园区XX路88号' },
+  { id: 'C002', name: '北京某设备制造有限公司', phone: '010-66667890', address: '北京市朝阳区望京科技园YY路12号' },
+  { id: 'C003', name: '广州某工业设备有限公司', phone: '020-77773456', address: '广州市黄埔区开发区ZZ路56号' }
 ])
+
+// 客户联系人列表（根据所选客户动态获取）
+const customerContacts = computed(() => {
+  if (!form.customerId) return []
+  return getContactsByCompanyId(form.customerId).filter(c => c.approvalStatus === '已通过')
+})
 
 // 设备数据
 const assets = ref([
-  { id: 'asset_001', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN001', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-03-15', installDate: '2025-06-10' },
-  { id: 'asset_002', customerId: 'cust_001', model: 'CNC-A100', serialNumber: 'SN002', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-01-10', installDate: '2024-03-20' },
-  { id: 'asset_003', customerId: 'cust_001', model: 'LASER-B200', serialNumber: 'SN003', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-06-20', installDate: '2025-09-15' },
-  { id: 'asset_004', customerId: 'cust_002', model: 'PRESS-C300', serialNumber: 'SN004', warrantyStatus: 'expired', warrantyExpiry: '2025-02-01', installDate: '2023-11-05' },
-  { id: 'asset_005', customerId: 'cust_002', model: 'CNC-A100', serialNumber: 'SN005', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-09-01', installDate: '2026-01-18' },
-  { id: 'asset_006', customerId: 'cust_003', model: 'LASER-B200', serialNumber: 'SN006', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-12-01', installDate: '' },
-  { id: 'asset_007', customerId: 'cust_003', model: 'PRESS-C300', serialNumber: 'SN007', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-04-15', installDate: '2024-08-22' }
+  { id: 'asset_001', customerId: 'C001', model: 'CNC-A100', serialNumber: 'SN001', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-03-15', installDate: '2025-06-10' },
+  { id: 'asset_002', customerId: 'C001', model: 'CNC-A100', serialNumber: 'SN002', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-01-10', installDate: '2024-03-20' },
+  { id: 'asset_003', customerId: 'C001', model: 'LASER-B200', serialNumber: 'SN003', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-06-20', installDate: '2025-09-15' },
+  { id: 'asset_004', customerId: 'C002', model: 'PRESS-C300', serialNumber: 'SN004', warrantyStatus: 'expired', warrantyExpiry: '2025-02-01', installDate: '2023-11-05' },
+  { id: 'asset_005', customerId: 'C002', model: 'CNC-A100', serialNumber: 'SN005', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-09-01', installDate: '2026-01-18' },
+  { id: 'asset_006', customerId: 'C003', model: 'LASER-B200', serialNumber: 'SN006', warrantyStatus: 'in_warranty', warrantyExpiry: '2027-12-01', installDate: '' },
+  { id: 'asset_007', customerId: 'C003', model: 'PRESS-C300', serialNumber: 'SN007', warrantyStatus: 'out_of_warranty', warrantyExpiry: '2026-04-15', installDate: '2024-08-22' }
 ])
 
 const WarrantyStatusText = { in_warranty: '保内', out_of_warranty: '保外', expired: '过保' }
@@ -226,6 +248,7 @@ const form = reactive({
   customerName: '',
   customerPhone: '',
   customerContact: '',
+  customerContactId: '',
   customerAddress: '',
   assetModel: '',
   assetSerialNumber: '',
@@ -261,16 +284,28 @@ const onCustomerChange = (customerId) => {
     form.customerName = customer.name
     form.customerPhone = customer.phone || ''
     form.customerAddress = customer.address || ''
-    form.customerContact = customer.contactPerson || ''
+    form.customerContactId = ''
+    form.customerContact = ''
   } else {
     form.customerName = ''
     form.customerPhone = ''
     form.customerAddress = ''
+    form.customerContactId = ''
     form.customerContact = ''
   }
   form.assetModel = ''
   form.assetSerialNumber = ''
   form.warrantyStatus = ''
+}
+
+const onContactChange = (contactId) => {
+  const contacts = customerContacts.value
+  const contact = contacts.find(c => c.id === contactId)
+  if (contact) {
+    form.customerContact = contact.name
+    form.customerContactId = contact.id
+    form.customerPhone = contact.phone || form.customerPhone
+  }
 }
 
 const onModelChange = () => {

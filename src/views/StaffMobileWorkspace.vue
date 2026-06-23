@@ -16,25 +16,6 @@
       </div>
     </div>
 
-    <!-- 部长：超时未分配工单提醒 -->
-    <div v-if="directorPendingCount > 0" class="timeout-alert-section" @click="openAssignDialog(getDirectorPendingPool()[0])">
-      <div class="alert-card alert-danger">
-        <div class="alert-icon">
-          <el-icon><Warning /></el-icon>
-        </div>
-        <div class="alert-content">
-          <div class="alert-title">
-            ⚠️ 有 {{ directorPendingCount }} 个工单超过2小时未分配
-          </div>
-          <div class="alert-desc">请及时分配处理，避免影响客户满意度</div>
-        </div>
-        <div class="alert-action">
-          <el-button type="danger" size="small" round>分配</el-button>
-          <el-icon class="arrow"><ArrowRight /></el-icon>
-        </div>
-      </div>
-    </div>
-
     <!-- 课长/经理：团队概览统计（课长隐藏） -->
     <div v-if="hasTeamAccess" class="manager-stats-section">
       <div class="section-title">
@@ -125,6 +106,25 @@
         </div>
         <div class="alert-action">
           <el-button type="primary" size="small" round>去审批</el-button>
+          <el-icon class="arrow"><ArrowRight /></el-icon>
+        </div>
+      </div>
+    </div>
+
+    <!-- 部长：超时未分配工单提醒 -->
+    <div v-if="directorPendingCount > 0" class="timeout-alert-section" @click="openAssignDialog(getDirectorPendingPool()[0])">
+      <div class="alert-card alert-danger">
+        <div class="alert-icon">
+          <el-icon><Warning /></el-icon>
+        </div>
+        <div class="alert-content">
+          <div class="alert-title">
+            ⚠️ 有 {{ directorPendingCount }} 个工单超过2小时未分配
+          </div>
+          <div class="alert-desc">请及时分配处理，避免影响客户满意度</div>
+        </div>
+        <div class="alert-action">
+          <el-button type="danger" size="small" round>分配</el-button>
           <el-icon class="arrow"><ArrowRight /></el-icon>
         </div>
       </div>
@@ -509,6 +509,19 @@
           </el-form-item>
           <el-form-item label="工作内容">
             <el-input v-model="assignFormData.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+            <div class="work-content-tags">
+              <span class="tags-label">快捷填入：</span>
+              <el-tag
+                v-for="tag in workContentTags"
+                :key="tag"
+                class="work-tag"
+                :effect="isTagSelected(tag) ? 'dark' : 'plain'"
+                :type="isTagSelected(tag) ? 'primary' : ''"
+                @click="toggleWorkTag(tag)"
+              >
+                {{ tag }}
+              </el-tag>
+            </div>
           </el-form-item>
           <el-form-item label="工作开始时间">
             <el-date-picker
@@ -1182,6 +1195,24 @@ const assignFormData = reactive({
   vehicle: 'self'
 })
 
+const workContentTags = [
+  '设备维修', '故障诊断', '配件更换', '设备调试', '试加工测试',
+  '设备改造', '操作培训', '定期保养', '检修巡检', '技术指导'
+]
+
+const toggleWorkTag = (tag) => {
+  const current = assignFormData.workContent || ''
+  if (current.includes(tag)) {
+    assignFormData.workContent = current.replace(new RegExp(tag + '(、)?'), '').replace(/、$/, '').replace(/^、/, '')
+  } else {
+    assignFormData.workContent = current ? current + '、' + tag : tag
+  }
+}
+
+const isTagSelected = (tag) => {
+  return (assignFormData.workContent || '').includes(tag)
+}
+
 const getCategoryText = (cat) => {
   const map = { installation: '安装工单', service: '服务工单' }
   return map[cat] || cat
@@ -1625,7 +1656,7 @@ const handleWindowFocus = () => {
 
 /* 课长：团队概览区域 */
 .manager-stats-section {
-  margin: -20px 15px 15px;
+  margin: 10px 15px 15px;
   background: white;
   border-radius: 12px;
   padding: 15px;
@@ -1887,7 +1918,7 @@ const handleWindowFocus = () => {
 
 /* 超时提醒区域 */
 .timeout-alert-section {
-  padding: 15px 15px 0;
+  padding: 0 15px 15px;
 }
 
 .alert-card {
@@ -2615,5 +2646,23 @@ const handleWindowFocus = () => {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.work-content-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tags-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.work-tag {
+  cursor: pointer;
+  user-select: none;
 }
 </style>

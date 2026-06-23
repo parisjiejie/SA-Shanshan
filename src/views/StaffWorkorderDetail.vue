@@ -53,7 +53,18 @@
       <div class="info-card" v-if="workorder.engineerName && workorder.status !== 'pending_assign'">
         <div class="card-title">分配信息</div>
         <div class="info-item"><span class="label">工程师</span><span class="value">{{ workorder.engineerName }}</span></div>
+        <div class="info-item" v-if="workorder.engineerPhone"><span class="label">电话</span><span class="value"><a :href="'tel:' + workorder.engineerPhone" class="phone-link">{{ workorder.engineerPhone }} <el-icon><Phone /></el-icon></a></span></div>
         <div class="info-item" v-if="workorder.assignTime"><span class="label">分配时间</span><span class="value">{{ formatDateTime(workorder.assignTime) }}</span></div>
+        <div class="info-item" v-if="workorder.assignedEngineers && workorder.assignedEngineers.length > 1">
+          <span class="label">协同人员</span>
+          <span class="value">
+            <el-tag v-for="eng in workorder.assignedEngineers.filter(e => e.id !== workorder.engineerId)" :key="eng.id" size="small" style="margin-right:4px;margin-bottom:2px;">{{ eng.name }}</el-tag>
+          </span>
+        </div>
+        <div class="info-item" v-if="workorder.workContent"><span class="label">工作内容</span><span class="value" style="white-space:pre-wrap">{{ workorder.workContent }}</span></div>
+        <div class="info-item" v-if="workorder.workStartTime"><span class="label">工作开始时间</span><span class="value">{{ formatDateTime(workorder.workStartTime) }}</span></div>
+        <div class="info-item" v-if="workorder.workEndTime"><span class="label">预定完成时间</span><span class="value">{{ formatDateTime(workorder.workEndTime) }}</span></div>
+        <div class="info-item" v-if="workorder.vehicle"><span class="label">用车安排</span><span class="value">{{ vehicleText(workorder.vehicle) }}</span></div>
         <div class="info-item" v-if="workorder.acceptTime"><span class="label">接单时间</span><span class="value">{{ formatDateTime(workorder.acceptTime) }}</span></div>
         <div class="info-item" v-if="workorder.completeTime"><span class="label">完成时间</span><span class="value">{{ formatDateTime(workorder.completeTime) }}</span></div>
       </div>
@@ -343,6 +354,19 @@
           </el-form-item>
           <el-form-item label="工作内容">
             <el-input v-model="assignFormData.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+            <div class="work-content-tags">
+              <span class="tags-label">快捷填入：</span>
+              <el-tag
+                v-for="tag in workContentTags"
+                :key="tag"
+                class="work-tag"
+                :effect="isTagSelected(tag) ? 'dark' : 'plain'"
+                :type="isTagSelected(tag) ? 'primary' : ''"
+                @click="toggleWorkTag(tag)"
+              >
+                {{ tag }}
+              </el-tag>
+            </div>
           </el-form-item>
           <el-form-item label="工作开始时间">
             <el-date-picker
@@ -435,6 +459,19 @@ const testResultTags = [
   '报警已消除', '温度正常', '振动值正常', '噪音达标',
   '需观察运行', '需更换部件', '待配件到货', '建议下次保养'
 ]
+
+const toggleWorkTag = (tag) => {
+  const current = assignFormData.workContent || ''
+  if (current.includes(tag)) {
+    assignFormData.workContent = current.replace(new RegExp(tag + '(、)?'), '').replace(/、$/, '').replace(/^、/, '')
+  } else {
+    assignFormData.workContent = current ? current + '、' + tag : tag
+  }
+}
+
+const isTagSelected = (tag) => {
+  return (assignFormData.workContent || '').includes(tag)
+}
 
 // 常用词追加到文本框
 const appendTag = (field, tag) => {
@@ -760,6 +797,11 @@ const getStatusType = (s) => ({ pending_assign: 'warning', pending_accept: 'info
 const getStatusText = (s) => ({ pending_assign: '待分配', pending_accept: '待接单', processing: '进行中', pending_sign: '待签字', techlead_confirm: '课长确认', assistant_confirm: '业务确认', completed: '已完成' }[s] || s)
 const getTypeText = (t) => ({ service: '维修', install: '安装', parts: '配件', maintenance: '保养' }[t] || t || '维修')
 const formatDateTime = (d) => { if (!d) return ''; const t = new Date(d); return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}` }
+
+const vehicleText = (v) => {
+  const map = { self: '自用车', company: '公司车', public: '公共交通' }
+  return map[v] || v
+}
 </script>
 
 <style scoped>
@@ -996,5 +1038,23 @@ const formatDateTime = (d) => { if (!d) return ''; const t = new Date(d); return
   border: 1px solid #e4e7ed;
   border-radius: 6px;
   background: #fafafa;
+}
+
+.work-content-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tags-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.work-tag {
+  cursor: pointer;
+  user-select: none;
 }
 </style>

@@ -151,6 +151,19 @@
           </el-form-item>
           <el-form-item label="工作内容">
             <el-input v-model="assignDialog.workContent" type="textarea" :rows="3" placeholder="请填写工作内容" />
+            <div class="work-content-tags">
+              <span class="tags-label">快捷填入：</span>
+              <el-tag
+                v-for="tag in workContentTags"
+                :key="tag"
+                class="work-tag"
+                :effect="isTagSelected(tag) ? 'dark' : 'plain'"
+                :type="isTagSelected(tag) ? 'primary' : ''"
+                @click="toggleWorkTag(tag)"
+              >
+                {{ tag }}
+              </el-tag>
+            </div>
           </el-form-item>
           <el-form-item label="工作开始时间">
             <el-date-picker
@@ -296,6 +309,32 @@ const assignDialog = reactive({
   workEndTime: null,
   vehicle: 'self'
 })
+
+const workContentTags = [
+  '设备维修',
+  '故障诊断',
+  '配件更换',
+  '设备调试',
+  '试加工测试',
+  '设备改造',
+  '操作培训',
+  '定期保养',
+  '检修巡检',
+  '技术指导'
+]
+
+const toggleWorkTag = (tag) => {
+  const current = assignDialog.workContent || ''
+  if (current.includes(tag)) {
+    assignDialog.workContent = current.replace(new RegExp(tag + '(、)?'), '').replace(/、$/, '').replace(/^、/, '')
+  } else {
+    assignDialog.workContent = current ? current + '、' + tag : tag
+  }
+}
+
+const isTagSelected = (tag) => {
+  return (assignDialog.workContent || '').includes(tag)
+}
 
 // 报价对话框
 const quotationDialog = ref({
@@ -760,5 +799,23 @@ onUnmounted(() => {
     border-left: 1px solid #e8e8e8;
     border-right: 1px solid #e8e8e8;
   }
+}
+
+.work-content-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.tags-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.work-tag {
+  cursor: pointer;
+  user-select: none;
 }
 </style>
