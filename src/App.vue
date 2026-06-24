@@ -240,7 +240,7 @@
         
         <!-- 主内容区 -->
         <div class="main-container" :class="{ 'full-width': isMobileWorkspacePage }">
-          <el-header class="header">
+          <el-header v-if="!isMobileView" class="header">
             <div class="header-left">
               <el-button v-if="!isMobileWorkspacePage" link class="menu-toggle" @click="toggleSidebar">
                 <el-icon><Menu /></el-icon>

@@ -45,6 +45,24 @@
       </div>
     </div>
 
+    <!-- 附件（客户上传的照片/视频） -->
+    <div class="info-section" v-if="attachmentData.length > 0">
+      <h4 class="section-title">
+        <el-icon><Picture /></el-icon>
+        <span>附件</span>
+      </h4>
+      <div class="attachment-list">
+        <template v-for="(att, idx) in attachmentData" :key="idx">
+          <div v-if="att.type === 'image' || att.url?.startsWith('data:image')" class="attachment-item" @click="previewAttachmentImage(att.url)">
+            <img :src="att.url" class="attachment-thumb" />
+          </div>
+          <div v-else-if="att.type === 'video' || att.url?.startsWith('data:video')" class="attachment-item">
+            <video :src="att.url" class="attachment-video" controls playsinline></video>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <!-- 服务进度 -->
     <div class="info-section">
       <h4 class="section-title">
@@ -260,6 +278,12 @@
       </div>
     </div>
 
+    <!-- 附件图片大图预览 -->
+    <div v-if="attachmentPreviewVisible" class="attachment-preview-overlay" @click="attachmentPreviewVisible = false">
+      <img :src="attachmentPreviewUrl" class="attachment-preview-full" @click.stop />
+      <div class="preview-close-btn">✕</div>
+    </div>
+
     <!-- PDF预览对话框 -->
     <el-dialog
       v-model="pdfDialog.visible"
@@ -268,7 +292,10 @@
       fullscreen
       @close="onPdfDialogClose"
     >
-      <iframe v-if="pdfDialog.url" :src="pdfDialog.url" style="width:100%;height:70vh;border:none;"></iframe>
+      <div v-if="pdfDialog.images.length > 0" class="pdf-preview-images">
+        <img v-for="(img, i) in pdfDialog.images" :key="i" :src="img" class="preview-page" />
+      </div>
+      <iframe v-else-if="pdfDialog.url" :src="pdfDialog.url" style="width:100%;height:70vh;border:none;"></iframe>
       <div style="text-align:center;margin-top:15px;">
         <el-button type="primary" @click="downloadPdf">下载PDF</el-button>
       </div>
@@ -293,9 +320,11 @@ import {
   Star,
   Delete,
   Download,
-  Check
+  Check,
+  Picture
 } from '@element-plus/icons-vue'
 import { getWorkorderById, getCustomerWorkorders, getPendingSurveysByCustomer, signWorkorder, submitSatisfactionSurvey, saveReportPdf, WorkorderStatusText, WorkorderStatusType } from '../stores/workorderFlowStore.js'
+import { getAttachments } from '../stores/attachmentStore.js'
 import { generateReportPdf } from '../utils/reportPdf.js'
 
 const route = useRoute()
@@ -322,6 +351,9 @@ const workorder = ref({
   serviceReport: null,
   reportPdf: null
 })
+
+// 从 IndexedDB 加载的附件完整数据
+const attachmentData = ref([])
 
 // 签字对话框
 const signDialog = reactive({
@@ -380,8 +412,16 @@ const formatTime = (timeStr) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
+// 附件图片预览
+const attachmentPreviewVisible = ref(false)
+const attachmentPreviewUrl = ref('')
+const previewAttachmentImage = (url) => {
+  attachmentPreviewUrl.value = url
+  attachmentPreviewVisible.value = true
+}
+
 // 加载工单详情
-const loadWorkorderDetail = () => {
+const loadWorkorderDetail = async () => {
   const id = route.query.id
   if (!id) {
     ElMessage.error('工单ID不存在')
@@ -391,18 +431,8 @@ const loadWorkorderDetail = () => {
 
   // 从 store 获取工单数据
   const storeWorkorder = getWorkorderById(id)
-  
+
   if (storeWorkorder) {
-        // 权限检查：客户只能查看自己的工单
-        // 演示环境下：客户测试账号可查看所有工单
-        // 正式环境应恢复：通过 getCustomerWorkorders 判断
-        // const customerWorkorderIds = getCustomerWorkorders().map(w => String(w.id || w.workorderId))
-        // const currentId = String(storeWorkorder.id || storeWorkorder.workorderId)
-        // if (customerWorkorderIds.length > 0 && !customerWorkorderIds.includes(currentId)) {
-        //   ElMessage.error('无权查看此工单')
-        //   router.back()
-        //   return
-        // }
     // 转换 store 数据为组件格式
     workorder.value = {
       id: storeWorkorder.id,
@@ -427,9 +457,17 @@ const loadWorkorderDetail = () => {
         operator: r.operator
       })) || [],
       serviceReport: storeWorkorder.serviceReport,
-      reportPdf: storeWorkorder.reportPdf
+      reportPdf: storeWorkorder.reportPdf,
+      reportPreviewImages: storeWorkorder.reportPreviewImages || [],
+      attachments: storeWorkorder.attachments || []
     }
     console.log('加载工单详情:', workorder.value)
+    // 从 IndexedDB 加载附件完整数据
+    if (storeWorkorder.attachments && storeWorkorder.attachments.length > 0) {
+      attachmentData.value = await getAttachments(storeWorkorder.attachments)
+    } else {
+      attachmentData.value = []
+    }
   } else {
     ElMessage.error('工单不存在')
     router.back()
@@ -528,10 +566,11 @@ const submitSign = async () => {
   const signImage = signCanvas.value.toDataURL('image/png')
   
   try {
-    const pdfBase64 = await generateReportPdf(workorder.value, signImage, 'customer')
-    if (pdfBase64) {
-      saveReportPdf(workorder.value.id, pdfBase64)
-      workorder.value.reportPdf = pdfBase64
+    const result = await generateReportPdf(workorder.value, signImage, 'customer')
+    if (result.pdfDataUri) {
+      saveReportPdf(workorder.value.id, result.pdfDataUri, result.previewImages)
+      workorder.value.reportPdf = result.pdfDataUri
+      workorder.value.reportPreviewImages = result.previewImages
     }
   } catch (e) {
     console.error('PDF生成失败:', e)
@@ -553,32 +592,43 @@ const viewQuotation = () => {
   ElMessage.info('查看报价功能开发中')
 }
 
-// PDF预览 - 使用 Blob URL 兼容手机浏览器
-const pdfDialog = reactive({ visible: false, url: '', _blobUrl: null })
+// PDF预览 - 图片展示优先（兼容微信），iframe兜底
+const pdfDialog = reactive({ visible: false, url: '', images: [], _blobUrl: null })
 
 const dataUriToBlobUrl = (dataUri) => {
   try {
-    const base64Match = dataUri.match(/^data:application\/pdf;base64,(.+)$/)
-    if (base64Match) {
-      const binaryStr = atob(base64Match[1])
-      const bytes = new Uint8Array(binaryStr.length)
-      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
-      const blob = new Blob([bytes], { type: 'application/pdf' })
-      return URL.createObjectURL(blob)
-    }
+    let base64 = dataUri
+    const match = dataUri.match(/;base64,([\s\S]*)$/i)
+    if (match) base64 = match[1]
+    base64 = base64.replace(/[\s\n\r]/g, '')
+    const binaryStr = atob(base64)
+    const bytes = new Uint8Array(binaryStr.length)
+    for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
+    const blob = new Blob([bytes], { type: 'application/pdf' })
+    return URL.createObjectURL(blob)
   } catch (e) {
     console.error('PDF Blob转换失败:', e)
   }
   return dataUri
 }
 
+const isMobile = () => window.innerWidth <= 768
+
 const previewPdf = () => {
   if (!workorder.value.reportPdf) { ElMessage.warning('PDF不存在'); return }
   // 释放旧的 Blob URL
   if (pdfDialog._blobUrl) { URL.revokeObjectURL(pdfDialog._blobUrl); pdfDialog._blobUrl = null }
-  const blobUrl = dataUriToBlobUrl(workorder.value.reportPdf)
-  pdfDialog.url = blobUrl
-  pdfDialog._blobUrl = blobUrl.startsWith('blob:') ? blobUrl : null
+  // 手机端优先使用预览图片（兼容微信等不支持PDF的浏览器），电脑端用iframe渲染PDF
+  const images = workorder.value.reportPreviewImages
+  if (isMobile() && images && images.length > 0) {
+    pdfDialog.images = images
+    pdfDialog.url = ''
+  } else {
+    pdfDialog.images = []
+    const blobUrl = dataUriToBlobUrl(workorder.value.reportPdf)
+    pdfDialog.url = blobUrl
+    pdfDialog._blobUrl = blobUrl.startsWith('blob:') ? blobUrl : null
+  }
   pdfDialog.visible = true
 }
 
@@ -879,6 +929,15 @@ onMounted(() => {
   flex: 1;
 }
 
+/* 附件展示 */
+.attachment-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.attachment-item { width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid #e8e8e8; cursor: pointer; }
+.attachment-thumb { width: 100%; height: 100%; object-fit: cover; }
+.attachment-video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.attachment-preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 10001; }
+.attachment-preview-full { max-width: 90%; max-height: 90%; object-fit: contain; }
+.preview-close-btn { position: absolute; top: 20px; right: 20px; color: white; font-size: 28px; cursor: pointer; padding: 10px; }
+
 /* 底部操作 */
 .detail-footer {
   position: fixed;
@@ -1118,5 +1177,19 @@ onMounted(() => {
     left: 50%;
     transform: translateX(-50%);
   }
+}
+.pdf-preview-images {
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #f5f5f5;
+  padding: 10px;
+}
+.preview-page {
+  display: block;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 4px;
 }
 </style>

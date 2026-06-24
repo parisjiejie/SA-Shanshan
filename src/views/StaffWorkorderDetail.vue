@@ -28,8 +28,8 @@
         <div class="info-item" v-if="workorder.engineerName"><span class="label">工程师</span><span class="value">{{ workorder.engineerName }}</span></div>
       </div>
 
-      <!-- 客户信息 -->
-      <div class="info-card">
+      <!-- 客户信息（客户角色不显示自己的信息） -->
+      <div class="info-card" v-if="!isCustomer">
         <div class="card-title">客户信息</div>
         <div class="info-item"><span class="label">客户</span><span class="value">{{ workorder.customerName }}</span></div>
         <div class="info-item"><span class="label">负责人</span><span class="value">{{ workorder.customerContact || '-' }}</span></div>
@@ -49,24 +49,26 @@
         <div class="info-item" v-if="workorder.installDate"><span class="label">安装日期</span><span class="value">{{ workorder.installDate }}</span></div>
       </div>
 
-      <!-- 分配信息 -->
+      <!-- 分配信息（客户只看工程师姓名和电话） -->
       <div class="info-card" v-if="workorder.engineerName && workorder.status !== 'pending_assign'">
-        <div class="card-title">分配信息</div>
+        <div class="card-title">服务工程师</div>
         <div class="info-item"><span class="label">工程师</span><span class="value">{{ workorder.engineerName }}</span></div>
         <div class="info-item" v-if="workorder.engineerPhone"><span class="label">电话</span><span class="value"><a :href="'tel:' + workorder.engineerPhone" class="phone-link">{{ workorder.engineerPhone }} <el-icon><Phone /></el-icon></a></span></div>
-        <div class="info-item" v-if="workorder.assignTime"><span class="label">分配时间</span><span class="value">{{ formatDateTime(workorder.assignTime) }}</span></div>
-        <div class="info-item" v-if="workorder.assignedEngineers && workorder.assignedEngineers.length > 1">
-          <span class="label">协同人员</span>
-          <span class="value">
-            <el-tag v-for="eng in workorder.assignedEngineers.filter(e => e.id !== workorder.engineerId)" :key="eng.id" size="small" style="margin-right:4px;margin-bottom:2px;">{{ eng.name }}</el-tag>
-          </span>
-        </div>
-        <div class="info-item" v-if="workorder.workContent"><span class="label">工作内容</span><span class="value" style="white-space:pre-wrap">{{ workorder.workContent }}</span></div>
-        <div class="info-item" v-if="workorder.workStartTime"><span class="label">工作开始时间</span><span class="value">{{ formatDateTime(workorder.workStartTime) }}</span></div>
-        <div class="info-item" v-if="workorder.workEndTime"><span class="label">预定完成时间</span><span class="value">{{ formatDateTime(workorder.workEndTime) }}</span></div>
-        <div class="info-item" v-if="workorder.vehicle"><span class="label">用车安排</span><span class="value">{{ vehicleText(workorder.vehicle) }}</span></div>
-        <div class="info-item" v-if="workorder.acceptTime"><span class="label">接单时间</span><span class="value">{{ formatDateTime(workorder.acceptTime) }}</span></div>
-        <div class="info-item" v-if="workorder.completeTime"><span class="label">完成时间</span><span class="value">{{ formatDateTime(workorder.completeTime) }}</span></div>
+        <template v-if="!isCustomer">
+          <div class="info-item" v-if="workorder.assignTime"><span class="label">分配时间</span><span class="value">{{ formatDateTime(workorder.assignTime) }}</span></div>
+          <div class="info-item" v-if="workorder.assignedEngineers && workorder.assignedEngineers.length > 1">
+            <span class="label">协同人员</span>
+            <span class="value">
+              <el-tag v-for="eng in workorder.assignedEngineers.filter(e => e.id !== workorder.engineerId)" :key="eng.id" size="small" style="margin-right:4px;margin-bottom:2px;">{{ eng.name }}</el-tag>
+            </span>
+          </div>
+          <div class="info-item" v-if="workorder.workContent"><span class="label">工作内容</span><span class="value" style="white-space:pre-wrap">{{ workorder.workContent }}</span></div>
+          <div class="info-item" v-if="workorder.workStartTime"><span class="label">工作开始时间</span><span class="value">{{ formatDateTime(workorder.workStartTime) }}</span></div>
+          <div class="info-item" v-if="workorder.workEndTime"><span class="label">预定完成时间</span><span class="value">{{ formatDateTime(workorder.workEndTime) }}</span></div>
+          <div class="info-item" v-if="workorder.vehicle"><span class="label">用车安排</span><span class="value">{{ vehicleText(workorder.vehicle) }}</span></div>
+          <div class="info-item" v-if="workorder.acceptTime"><span class="label">接单时间</span><span class="value">{{ formatDateTime(workorder.acceptTime) }}</span></div>
+          <div class="info-item" v-if="workorder.completeTime"><span class="label">完成时间</span><span class="value">{{ formatDateTime(workorder.completeTime) }}</span></div>
+        </template>
       </div>
 
       <!-- 签字确认信息 -->
@@ -90,6 +92,21 @@
       <div class="info-card">
         <div class="card-title">故障描述</div>
         <div class="description-content">{{ workorder.faultDescription }}</div>
+      </div>
+
+      <!-- 附件（客户上传的照片/视频） -->
+      <div class="info-card" v-if="attachmentData.length > 0">
+        <div class="card-title">附件</div>
+        <div class="attachment-list">
+          <template v-for="(att, idx) in attachmentData" :key="idx">
+            <div v-if="att.type === 'image' || att.url?.startsWith('data:image')" class="attachment-item" @click="previewAttachmentImage(att.url)">
+              <img :src="att.url" class="attachment-thumb" />
+            </div>
+            <div v-else-if="att.type === 'video' || att.url?.startsWith('data:video')" class="attachment-item">
+              <video :src="att.url" class="attachment-video" controls playsinline></video>
+            </div>
+          </template>
+        </div>
       </div>
 
       <!-- ===== 进行中：服务报告表单 ===== -->
@@ -230,35 +247,43 @@
 
       <!-- ===== 底部操作栏 ===== -->
       <div class="action-bar">
-        <!-- 待分配：课长分配 -->
-        <template v-if="workorder.status === 'pending_assign' && isTechLead">
-          <el-button type="primary" size="large" round block @click="showAssignDialog">分配工程师</el-button>
+        <!-- 客户角色操作 -->
+        <template v-if="isCustomer">
+          <el-button v-if="workorder.status === 'pending_sign'" type="primary" size="large" round block @click="openSignDialog('customer')">签字确认</el-button>
+          <el-button v-if="workorder.status === 'completed' && !workorder.isEvaluated" type="success" size="large" round block @click="openEvaluateDialog">评价服务</el-button>
         </template>
-        <!-- 待接单：只有工程师能接单弃单 -->
-        <template v-if="workorder.status === 'pending_accept' && isEngineer">
-          <el-button type="primary" size="large" round block @click="doAccept">接单</el-button>
-          <el-button type="warning" size="large" round block @click="doReject" style="margin-top:8px">弃单</el-button>
-        </template>
-        <!-- 进行中：工程师可打卡+提交签字 -->
-        <template v-else-if="workorder.status === 'processing' && isEngineer">
-          <el-button type="primary" size="large" round block :disabled="hasCheckedIn" @click="goToCheckInFromDetail">{{ hasCheckedIn ? '已打卡' : '打卡签到' }}</el-button>
-          <el-button type="success" size="large" round block @click="submitForSignAction" style="margin-top:8px">提交并请客户签字</el-button>
-        </template>
-        <!-- 待签字：只有工程师能操作签字 -->
-        <template v-else-if="workorder.status === 'pending_sign' && isEngineer">
-          <el-button type="warning" size="large" round block @click="openSignDialog('engineer')">客户签字 / 工程师代签</el-button>
-        </template>
-        <!-- 课长确认 -->
-        <template v-else-if="workorder.status === 'techlead_confirm' && isTechLead">
-          <el-button type="primary" size="large" round block @click="doTechLeadConfirm">课长确认</el-button>
-        </template>
-        <!-- 业务确认 -->
-        <template v-else-if="workorder.status === 'assistant_confirm' && isAssistant">
-          <el-button type="primary" size="large" round block @click="doAssistantConfirm">业务确认</el-button>
-        </template>
-        <!-- 完成 -->
-        <template v-else-if="workorder.status === 'completed'">
-          <el-button type="info" size="large" round block disabled>工单已完成</el-button>
+        <!-- 内部角色操作 -->
+        <template v-else>
+          <!-- 待分配：课长分配 -->
+          <template v-if="workorder.status === 'pending_assign' && isTechLead">
+            <el-button type="primary" size="large" round block @click="showAssignDialog">分配工程师</el-button>
+          </template>
+          <!-- 待接单：只有工程师能接单弃单 -->
+          <template v-if="workorder.status === 'pending_accept' && isEngineer">
+            <el-button type="primary" size="large" round block @click="doAccept">接单</el-button>
+            <el-button type="warning" size="large" round block @click="doReject" style="margin-top:8px">弃单</el-button>
+          </template>
+          <!-- 进行中：工程师可打卡+提交签字 -->
+          <template v-else-if="workorder.status === 'processing' && isEngineer">
+            <el-button type="primary" size="large" round block :disabled="hasCheckedIn" @click="goToCheckInFromDetail">{{ hasCheckedIn ? '已打卡' : '打卡签到' }}</el-button>
+            <el-button type="success" size="large" round block @click="submitForSignAction" style="margin-top:8px">提交并请客户签字</el-button>
+          </template>
+          <!-- 待签字：只有工程师能操作签字 -->
+          <template v-else-if="workorder.status === 'pending_sign' && isEngineer">
+            <el-button type="warning" size="large" round block @click="openSignDialog('engineer')">客户签字 / 工程师代签</el-button>
+          </template>
+          <!-- 课长确认 -->
+          <template v-else-if="workorder.status === 'techlead_confirm' && isTechLead">
+            <el-button type="primary" size="large" round block @click="doTechLeadConfirm">课长确认</el-button>
+          </template>
+          <!-- 业务确认 -->
+          <template v-else-if="workorder.status === 'assistant_confirm' && isAssistant">
+            <el-button type="primary" size="large" round block @click="doAssistantConfirm">业务确认</el-button>
+          </template>
+          <!-- 完成 -->
+          <template v-else-if="workorder.status === 'completed'">
+            <el-button type="info" size="large" round block disabled>工单已完成</el-button>
+          </template>
         </template>
       </div>
     </template>
@@ -294,10 +319,39 @@
       </div>
     </div>
 
-    <!-- PDF预览弹框 -->
-    <el-dialog v-model="pdfPreviewVisible" title="服务报告书" width="90%" fullscreen>
-      <iframe :src="pdfPreviewUrl" style="width:100%;height:70vh;border:none;"></iframe>
-    </el-dialog>
+    <!-- 评价全屏页面 -->
+    <div v-if="evaluateDialog.visible" class="evaluate-fullscreen-page">
+      <div class="evaluate-header">
+        <el-button link @click="evaluateDialog.visible = false"><el-icon><ArrowLeft /></el-icon>返回</el-button>
+        <span class="header-title">服务评价</span>
+        <span class="placeholder"></span>
+      </div>
+      <div class="evaluate-content">
+        <div class="evaluate-card">
+          <div class="rate-item">
+            <span class="label">服务态度</span>
+            <el-rate v-model="evaluateDialog.serviceRate" size="large" />
+          </div>
+          <div class="rate-item">
+            <span class="label">响应速度</span>
+            <el-rate v-model="evaluateDialog.responseRate" size="large" />
+          </div>
+          <div class="rate-item">
+            <span class="label">技术水平</span>
+            <el-rate v-model="evaluateDialog.techniqueRate" size="large" />
+          </div>
+        </div>
+        <div class="comment-card">
+          <h4>评价建议（选填）</h4>
+          <el-input v-model="evaluateDialog.comment" type="textarea" :rows="5" placeholder="请输入您的评价建议，帮助我们改进服务..." />
+        </div>
+      </div>
+      <div class="evaluate-footer">
+        <el-button type="primary" size="large" @click="submitEvaluate" style="width:100%">
+          <el-icon><Check /></el-icon>提交评价
+        </el-button>
+      </div>
+    </div>
 
     <!-- 分配工程师对话框 -->
     <el-dialog
@@ -404,6 +458,28 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 附件图片大图预览 -->
+    <div v-if="attachmentPreviewVisible" class="attachment-preview-overlay" @click="attachmentPreviewVisible = false">
+      <img :src="attachmentPreviewUrl" class="attachment-preview-full" @click.stop />
+      <div class="preview-close-btn">✕</div>
+    </div>
+
+    <!-- PDF全屏预览覆盖层（图片展示兼容微信，iframe兜底） -->
+    <div v-if="pdfOverlayVisible" class="pdf-overlay">
+      <div class="pdf-overlay-header">
+        <el-button link @click="closePdfOverlay">
+          <el-icon><ArrowLeft /></el-icon>
+          <span>返回</span>
+        </el-button>
+        <span class="header-title">PDF预览</span>
+        <el-button link size="small" @click="downloadPdf">下载</el-button>
+      </div>
+      <div v-if="pdfOverlayImages.length > 0" class="pdf-preview-images">
+        <img v-for="(img, i) in pdfOverlayImages" :key="i" :src="img" class="preview-page" />
+      </div>
+      <iframe v-else :src="pdfOverlayUrl" class="pdf-overlay-iframe" frameborder="0"></iframe>
+    </div>
   </div>
 </template>
 
@@ -412,7 +488,8 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Phone, Delete, Check, Close, Plus } from '@element-plus/icons-vue'
-import { getWorkorderById, acceptWorkorder, rejectWorkorder, submitForSign, signWorkorder, techLeadConfirm, assistantConfirm, saveServiceReportDraft, saveReportPdf, assignWorkorder, engineerList } from '../stores/workorderFlowStore.js'
+import { getWorkorderById, acceptWorkorder, rejectWorkorder, submitForSign, signWorkorder, techLeadConfirm, assistantConfirm, saveServiceReportDraft, saveReportPdf, assignWorkorder, engineerList, getPendingSurveysByCustomer, submitSatisfactionSurvey } from '../stores/workorderFlowStore.js'
+import { getAttachments } from '../stores/attachmentStore.js'
 import { generateReportPdf } from '../utils/reportPdf.js'
 
 const router = useRouter()
@@ -421,8 +498,7 @@ const route = useRoute()
 const workorder = ref(null)
 const staffInfo = ref({ name: '工程师' })
 const signLoading = ref(false)
-const pdfPreviewVisible = ref(false)
-const pdfPreviewUrl = ref('')
+const attachmentData = ref([]) // 从 IndexedDB 加载的附件完整数据
 
 // 服务报告表单
 const reportForm = reactive({
@@ -511,6 +587,15 @@ const signDialog = reactive({
   signRole: 'customer',
 })
 
+// 评价对话框
+const evaluateDialog = reactive({
+  visible: false,
+  serviceRate: 5,
+  responseRate: 5,
+  techniqueRate: 5,
+  comment: ''
+})
+
 const signCanvas = ref(null)
 let isDrawing = false
 let ctx = null
@@ -520,23 +605,16 @@ const currentRole = computed(() => staffInfo.value?.role || '')
 const isEngineer = computed(() => currentRole.value === 'engineer' || currentRole.value === 'admin')
 const isTechLead = computed(() => currentRole.value === 'techLead' || currentRole.value === 'admin' || currentRole.value === 'director')
 const isAssistant = computed(() => currentRole.value === 'assistant' || currentRole.value === 'admin')
+const isCustomer = computed(() => currentRole.value === 'customer')
 
 // 加载工单
-const loadWorkorder = () => {
+const loadWorkorder = async () => {
   const id = route.query.id
   staffInfo.value = JSON.parse(localStorage.getItem('staffAuth') || '{}')
 
   if (id) {
     const wo = getWorkorderById(id)
     if (wo) {
-      // 演示环境：所有角色可查看所有工单（正式环境应恢复工程师只看自己的）
-      // const role = staffInfo.value?.role || ''
-      // const name = staffInfo.value?.name || ''
-      // if (role === 'engineer' && (wo.engineerName !== name && wo.engineerId !== name && !(wo.createdBy && wo.createdBy.name === name))) {
-      //   ElMessage.error('无权查看此工单')
-      //   goBack()
-      //   return
-      // }
       workorder.value = wo
       // 回填报告表单
       if (wo.serviceReport) {
@@ -544,6 +622,12 @@ const loadWorkorder = () => {
         reportForm.repairProcess = wo.serviceReport.repairProcess || ''
         reportForm.replacedParts = wo.serviceReport.replacedParts || []
         reportForm.testResult = wo.serviceReport.testResult || ''
+      }
+      // 从 IndexedDB 加载附件完整数据
+      if (wo.attachments && wo.attachments.length > 0) {
+        attachmentData.value = await getAttachments(wo.attachments)
+      } else {
+        attachmentData.value = []
       }
     } else {
       // fallback: from localStorage
@@ -720,6 +804,46 @@ const doAssistantConfirm = () => {
   }).catch(() => {})
 }
 
+// ===== 评价 =====
+const openEvaluateDialog = () => {
+  evaluateDialog.visible = true
+  evaluateDialog.serviceRate = 5
+  evaluateDialog.responseRate = 5
+  evaluateDialog.techniqueRate = 5
+  evaluateDialog.comment = ''
+}
+
+const submitEvaluate = () => {
+  let customerId = 'guest'
+  try {
+    const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+    customerId = auth.id || auth.userId || 'guest'
+  } catch (e) {}
+
+  const pendingSurveys = getPendingSurveysByCustomer(customerId)
+  const survey = pendingSurveys.find(s => s.workorderId === (workorder.value.id || workorder.value.rawId))
+
+  if (survey) {
+    const result = submitSatisfactionSurvey(survey.id, {
+      serviceRate: evaluateDialog.serviceRate,
+      responseRate: evaluateDialog.responseRate,
+      techniqueRate: evaluateDialog.techniqueRate,
+      comment: evaluateDialog.comment
+    })
+    if (result) {
+      ElMessage.success('评价提交成功，感谢您的反馈！')
+      evaluateDialog.visible = false
+      workorder.value.isEvaluated = true
+    } else {
+      ElMessage.error('评价提交失败，请重试')
+    }
+  } else {
+    ElMessage.success('评价提交成功，感谢您的反馈！')
+    evaluateDialog.visible = false
+    workorder.value.isEvaluated = true
+  }
+}
+
 // ===== 签字 =====
 const openSignDialog = (role) => {
   signDialog.signRole = role || 'customer'
@@ -753,14 +877,14 @@ const confirmSignature = async () => {
 
   try {
     // 生成PDF
-    const pdfBase64 = await generateReportPdf(workorder.value, signImage, signDialog.signRole)
+    const result = await generateReportPdf(workorder.value, signImage, signDialog.signRole)
 
     // 签字流转
     const id = workorder.value.id || workorder.value.rawId
     signWorkorder(id, signImage, signDialog.signRole)
 
-    // 保存PDF
-    saveReportPdf(id, pdfBase64)
+    // 保存PDF及预览图片
+    saveReportPdf(id, result.pdfDataUri, result.previewImages)
 
     ElMessage.success('签字完成，PDF报告已生成')
     signDialog.visible = false
@@ -776,10 +900,62 @@ const confirmSignature = async () => {
   }
 }
 
+const pdfOverlayVisible = ref(false)
+const pdfOverlayUrl = ref('')
+const pdfOverlayImages = ref([])
+let _pdfOverlayDataUri = null
+
+const dataUriToBlobUrl = (dataUri) => {
+  let base64 = dataUri
+  const match = dataUri.match(/;base64,([\s\S]*)$/i)
+  if (match) base64 = match[1]
+  base64 = base64.replace(/[\s\n\r]/g, '')
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i) & 0xff
+  }
+  const blob = new Blob([bytes], { type: 'application/pdf' })
+  return URL.createObjectURL(blob)
+}
+
+const isMobile = () => window.innerWidth <= 768
+
+const openPdfInNewTab = (dataUri) => {
+  try {
+    if (pdfOverlayUrl.value && pdfOverlayUrl.value.startsWith('blob:')) {
+      URL.revokeObjectURL(pdfOverlayUrl.value)
+    }
+    // 手机端优先使用预览图片（兼容微信等不支持PDF的浏览器），电脑端用iframe渲染PDF
+    const images = workorder.value?.reportPreviewImages
+    if (isMobile() && images && images.length > 0) {
+      pdfOverlayImages.value = images
+      pdfOverlayUrl.value = ''
+    } else {
+      pdfOverlayImages.value = []
+      const url = dataUriToBlobUrl(dataUri)
+      pdfOverlayUrl.value = url
+    }
+    _pdfOverlayDataUri = dataUri
+    pdfOverlayVisible.value = true
+  } catch (e) {
+    console.error('PDF预览失败:', e)
+    ElMessage.warning('PDF预览失败，请尝试下载')
+  }
+}
+
+const closePdfOverlay = () => {
+  pdfOverlayVisible.value = false
+  if (pdfOverlayUrl.value && pdfOverlayUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(pdfOverlayUrl.value)
+    pdfOverlayUrl.value = ''
+  }
+  _pdfOverlayDataUri = null
+}
+
 const viewPdf = () => {
   if (workorder.value?.reportPdf) {
-    pdfPreviewUrl.value = workorder.value.reportPdf
-    pdfPreviewVisible.value = true
+    openPdfInNewTab(workorder.value.reportPdf)
   }
 }
 
@@ -790,6 +966,14 @@ const downloadPdf = () => {
     link.download = `服务报告书_${workorder.value.workorderId}.pdf`
     link.click()
   }
+}
+
+// 附件图片预览
+const attachmentPreviewVisible = ref(false)
+const attachmentPreviewUrl = ref('')
+const previewAttachmentImage = (url) => {
+  attachmentPreviewUrl.value = url
+  attachmentPreviewVisible.value = true
 }
 
 // ===== helpers =====
@@ -820,6 +1004,15 @@ const vehicleText = (v) => {
 .info-item .value { color: #333; text-align: right; }
 .phone-link { color: #409eff; text-decoration: none; }
 .description-content { font-size: 14px; color: #333; line-height: 1.6; white-space: pre-wrap; }
+
+/* 附件展示 */
+.attachment-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.attachment-item { width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid #e4e7ed; cursor: pointer; }
+.attachment-thumb { width: 100%; height: 100%; object-fit: cover; }
+.attachment-video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.attachment-preview-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; z-index: 10001; }
+.attachment-preview-full { max-width: 90%; max-height: 90%; object-fit: contain; }
+.preview-close-btn { position: absolute; top: 20px; right: 20px; color: white; font-size: 28px; cursor: pointer; padding: 10px; }
 
 .record-item { padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
 .record-time { font-size: 12px; color: #999; }
@@ -1040,6 +1233,64 @@ const vehicleText = (v) => {
   background: #fafafa;
 }
 
+/* 评价全屏页面 */
+.evaluate-fullscreen-page {
+  position: fixed;
+  inset: 0;
+  background: #f5f7fa;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+.evaluate-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+.evaluate-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.evaluate-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.evaluate-card .rate-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.evaluate-card .rate-item .label {
+  font-size: 16px;
+  color: #262626;
+  font-weight: 500;
+}
+.comment-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px;
+}
+.comment-card h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #262626;
+}
+.evaluate-footer {
+  padding: 12px 16px;
+  background: #fff;
+  border-top: 1px solid #eee;
+}
+
 .work-content-tags {
   margin-top: 10px;
   display: flex;
@@ -1056,5 +1307,46 @@ const vehicleText = (v) => {
 .work-tag {
   cursor: pointer;
   user-select: none;
+}
+
+.pdf-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: #fff;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+}
+.pdf-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
+}
+.pdf-overlay-header .header-title {
+  font-size: 16px;
+  font-weight: 500;
+}
+.pdf-overlay-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+}
+.pdf-preview-images {
+  flex: 1;
+  overflow-y: auto;
+  background: #f5f5f5;
+  padding: 10px;
+}
+.preview-page {
+  display: block;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 4px;
 }
 </style>

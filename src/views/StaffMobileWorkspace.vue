@@ -10,9 +10,20 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-button circle @click="switchToDesktop" title="切换到电脑端">
-          <el-icon><Monitor /></el-icon>
-        </el-button>
+        <!-- 通知小喇叭 -->
+        <el-badge :value="notificationUnreadCount" :hidden="notificationUnreadCount === 0" :max="99" class="notification-bell">
+          <el-button link class="bell-btn" @click="showNotifications = true">
+            <el-icon :size="20"><Bell /></el-icon>
+          </el-button>
+        </el-badge>
+        <!-- 设备切换按钮 -->
+        <button
+          class="device-switch-btn-raw"
+          @click="switchToDesktop"
+          title="切换到电脑端"
+        >
+          电脑端
+        </button>
       </div>
     </div>
 
@@ -49,9 +60,9 @@
           <span class="stat-number">{{ stats.today }}</span>
           <span class="stat-label">今日工单</span>
         </div>
-        <div class="stat-item" @click="goToWorkorders('pending_accept')">
-          <span class="stat-number">{{ stats.pending }}</span>
-          <span class="stat-label">待处理</span>
+        <div class="stat-item" @click="goToWorkorders(isTechLeadOrDirector ? 'pending_assign' : 'pending_accept')">
+          <span class="stat-number">{{ isTechLeadOrDirector ? stats.pendingAssign : stats.pendingAccept }}</span>
+          <span class="stat-label">{{ isTechLeadOrDirector ? '待分配' : '待接单' }}</span>
         </div>
         <div class="stat-item" @click="goToWorkorders('processing')">
           <span class="stat-number">{{ stats.processing }}</span>
@@ -182,38 +193,12 @@
       </div>
     </div>
 
-    <!-- 课长/经理：团队成员列表（课长隐藏） -->
-    <div v-if="hasTeamAccess" class="team-section">
-      <div class="section-header">
-        <h4>团队成员</h4>
-        <el-button link size="small" @click="goToTeamManagement">查看全部</el-button>
-      </div>
-      <div class="team-list">
-        <div 
-          v-for="member in teamMembers.slice(0, 4)" 
-          :key="member.id" 
-          class="team-member"
-          @click="viewMemberDetail(member)"
-        >
-          <div class="member-avatar">
-            <el-avatar :size="45" :icon="UserIcon" />
-            <div class="member-status" :class="member.status"></div>
-          </div>
-          <div class="member-info">
-            <span class="member-name">{{ member.name }}</span>
-            <span class="member-stats">今日 {{ member.todayWorkorders }} 单 | 累计 {{ member.completed }} 单</span>
-          </div>
-          <el-icon class="member-arrow"><ArrowRight /></el-icon>
-        </div>
-      </div>
-    </div>
-
     <!-- 快捷功能入口 -->
     <div class="quick-actions">
       <div class="action-grid" :key="currentUserRole">
         <!-- 管理员：工单管理、审批管理、打卡、BI数据 -->
         <template v-if="currentUserRole === 'admin'">
-          <div class="action-item workorder" @click="goToWorkorderManage">
+          <div class="action-item workorder" @click="goToWorkorders('all')">
             <div class="action-icon"><el-icon><Document /></el-icon></div>
             <span class="action-label">工单管理</span>
             <span class="action-desc">管理所有工单</span>
@@ -245,7 +230,7 @@
             <span class="action-label">新建工单</span>
             <span class="action-desc">创建服务工单</span>
           </div>
-          <div class="action-item workorder" @click="goToMyWorkorders">
+          <div class="action-item workorder" @click="goToWorkorders('all')">
             <div class="action-icon"><el-icon><Document /></el-icon></div>
             <span class="action-label">我的工单</span>
             <span class="action-desc">查看工单列表</span>
@@ -275,7 +260,7 @@
             <span class="action-label">审批管理</span>
             <span class="action-desc">打卡审批处理</span>
           </div>
-          <div class="action-item workorder" @click="goToTechLeadWorkorders">
+          <div class="action-item workorder" @click="goToWorkorders('pending_assign')">
             <div class="action-icon"><el-icon><Document /></el-icon></div>
             <span class="action-label">工单管理</span>
             <span class="action-desc">分配与确认工单</span>
@@ -302,10 +287,10 @@
             <span class="action-label">审批管理</span>
             <span class="action-desc">打卡审批处理</span>
           </div>
-          <div class="action-item workorder" @click="goToWorkorderManage">
+          <div class="action-item workorder" @click="goToWorkorders('pending_assign')">
             <div class="action-icon"><el-icon><Document /></el-icon></div>
             <span class="action-label">工单管理</span>
-            <span class="action-desc">管理所有工单</span>
+            <span class="action-desc">分配与确认工单</span>
           </div>
           <div class="action-item field" @click="goToFieldCheckinList">
             <div class="action-icon"><el-icon><MapLocation /></el-icon></div>
@@ -326,7 +311,7 @@
             <span class="action-label">扫码</span>
             <span class="action-desc">设备/工单扫码</span>
           </div>
-          <div class="action-item workorder" @click="goToMyWorkorders">
+          <div class="action-item workorder" @click="goToWorkorders('all')">
             <div class="action-icon"><el-icon><Document /></el-icon></div>
             <span class="action-label">我的工单</span>
             <span class="action-desc">查看工单列表</span>
@@ -348,34 +333,7 @@
       </div>
     </div>
 
-    <!-- 今日待办 -->
-    <div class="todo-section" v-if="todayTodos.length > 0">
-      <div class="section-header">
-        <h4>今日待办</h4>
-        <el-tag type="danger" size="small">{{ todayTodos.length }}</el-tag>
-      </div>
-      <div class="todo-list">
-        <div 
-          v-for="todo in todayTodos" 
-          :key="todo.id" 
-          class="todo-item"
-          @click="handleTodoClick(todo)"
-        >
-          <div class="todo-time">
-            <span class="time">{{ todo.time }}</span>
-            <el-tag :type="getTodoType(todo.type)" size="small">{{ getTodoLabel(todo.type) }}</el-tag>
-          </div>
-          <div class="todo-content">
-            <span class="todo-title">{{ todo.title }}</span>
-            <span class="todo-address">
-              <el-icon><Location /></el-icon>
-              {{ todo.address }}
-            </span>
-          </div>
-          <el-icon class="arrow"><ArrowRight /></el-icon>
-        </div>
-      </div>
-    </div>
+
 
     <!-- 最近工单 -->
     <div class="workorder-section">
@@ -393,14 +351,15 @@
           :class="{ active: activeTab === tab.key }"
           @click="activeTab = tab.key"
         >
-          {{ tab.name }}
-          <el-badge 
-            v-if="tab.count > 0" 
-            :value="tab.count" 
-            :type="tab.key === 'pending' ? 'danger' : 'primary'"
-            class="tab-badge"
-          />
+          <span class="tab-name">{{ tab.name }}</span>
+          <span class="tab-count" v-if="tab.count > 0 && tab.key !== 'all' && tab.key !== 'completed'">{{ tab.count }}</span>
         </div>
+      </div>
+
+      <!-- 列表顶部数量提示 -->
+      <div class="list-summary" v-if="activeTab === 'all' || activeTab === 'completed'">
+        <span v-if="activeTab === 'all'">共 {{ filteredWorkorders.length }} 条工单</span>
+        <span v-else>已完成 {{ filteredWorkorders.length }} 条</span>
       </div>
       
       <div class="workorder-list">
@@ -409,7 +368,7 @@
           <p>暂无工单</p>
         </div>
         <div 
-          v-for="order in filteredWorkorders" 
+          v-for="order in displayedWorkorders" 
           :key="order.id" 
           class="workorder-card"
           @click="viewWorkorderDetail(order)"
@@ -421,33 +380,43 @@
             </el-tag>
           </div>
           <div class="card-body">
-            <p class="device-info">
+            <div class="info-row">
               <el-icon><Monitor /></el-icon>
-              {{ order.deviceModel || '设备型号未指定' }}
-            </p>
+              <span class="device-model">{{ order.deviceModel || '设备型号未指定' }}</span>
+            </div>
+            <div class="info-row">
+              <el-icon><OfficeBuilding /></el-icon>
+              <span class="customer-name">{{ order.customerName }}</span>
+            </div>
+            <div class="info-row">
+              <el-icon><Location /></el-icon>
+              <span class="address">{{ order.address }}</span>
+            </div>
             <p class="order-desc">{{ order.faultDescription || order.description }}</p>
-            <p class="customer-info">
-              <el-icon><User /></el-icon>
-              {{ order.customerName }} | {{ order.customerPhone }}
-            </p>
           </div>
           <div class="card-footer">
             <span class="order-time">{{ formatDate(order.createTime) }}</span>
             <div class="action-buttons">
-              <!-- 待分配：课长/管理员/部长(超2h)分配 -->
-              <el-button v-if="order.status === 'pending_assign' && (isTechLead || currentUserRole === 'techLead' || currentUserRole === 'admin' || (currentUserRole === 'director'))" type="primary" size="small" @click.stop="openAssignDialog(order)">分配</el-button>
-              <!-- 待接单：工程师/管理员接单弃单 -->
-              <el-button v-if="order.status === 'pending_accept' && (isEngineer || currentUserRole === 'admin')" type="primary" size="small" @click.stop="acceptWorkorder(order)">接单</el-button>
-              <el-button v-if="order.status === 'pending_accept' && (isEngineer || currentUserRole === 'admin')" type="warning" size="small" @click.stop="rejectWorkorderMobile(order)">弃单</el-button>
-              <!-- 进行中：工程师/管理员打卡+完成 -->
-              <el-button v-if="order.status === 'processing' && (isEngineer || currentUserRole === 'admin')" type="primary" size="small" :disabled="hasCheckedIn(order)" @click.stop="goToCheckInFromWorkorder(order)">{{ hasCheckedIn(order) ? '已打卡' : '打卡' }}</el-button>
-              <el-button v-if="order.status === 'processing' && (isEngineer || currentUserRole === 'admin')" type="success" size="small" @click.stop="completeWorkorder(order)">完成</el-button>
-              <!-- 待签字：查看详情 -->
-              <el-button v-if="order.status === 'pending_sign'" type="primary" size="small" @click.stop="viewWorkorderDetail(order)">签字</el-button>
-              <!-- 课长确认：课长/管理员 -->
-              <el-button v-if="order.status === 'techlead_confirm' && (isTechLead || currentUserRole === 'techLead' || currentUserRole === 'admin')" type="primary" size="small" @click.stop="techLeadConfirmMobile(order)">课长确认</el-button>
-              <!-- 业务确认：业务助理/管理员 -->
-              <el-button v-if="order.status === 'assistant_confirm' && (isAssistant || currentUserRole === 'assistant' || currentUserRole === 'admin')" type="primary" size="small" @click.stop="assistantConfirmMobile(order)">业务确认</el-button>
+              <!-- 待分配：课长分配 + 创建人可编辑删除 -->
+              <template v-if="order.status === 'pending_assign'">
+                <el-button v-if="canAssignWorkorder(currentUserRole, order)" type="primary" size="small" @click.stop="openAssignDialog(order)">分配</el-button>
+                <el-button v-if="canEditForMobile(order)" type="success" size="small" @click.stop="handleEditWorkorder(order)">编辑</el-button>
+                <el-button v-if="canEditForMobile(order)" type="danger" size="small" @click.stop="handleDeleteWorkorder(order)">删除</el-button>
+              </template>
+              <!-- 待接单：工程师接单/弃单 -->
+              <template v-if="order.status === 'pending_accept'">
+                <el-button v-if="canAcceptWorkorder(currentUserRole, order, currentUserId)" type="primary" size="small" @click.stop="acceptWorkorder(order)">接单</el-button>
+                <el-button v-if="canRejectWorkorder(currentUserRole, order, currentUserId)" type="warning" size="small" @click.stop="rejectOrder(order)">弃单</el-button>
+              </template>
+              <!-- 进行中：工程师打卡+处理 -->
+              <el-button v-if="order.status === 'processing' && canSubmitForSign(currentUserRole, order, currentUserId)" type="primary" size="small" :disabled="hasCheckedIn(order)" @click.stop="goToCheckInFromWorkorder(order)">{{ hasCheckedIn(order) ? '已打卡' : '打卡' }}</el-button>
+              <el-button v-if="order.status === 'processing' && canSubmitForSign(currentUserRole, order, currentUserId)" type="success" size="small" @click.stop="goToProcess(order)">处理</el-button>
+              <!-- 待签字：工程师操作签字 -->
+              <el-button v-if="order.status === 'pending_sign' && canSignWorkorder(currentUserRole, order, currentUserId)" type="warning" size="small" @click.stop="goToSign(order)">签字</el-button>
+              <!-- 课长确认 -->
+              <el-button v-if="order.status === 'techlead_confirm' && canTechLeadConfirm(currentUserRole)" type="primary" size="small" @click.stop="techLeadConfirmMobile(order)">确认</el-button>
+              <!-- 业务确认 -->
+              <el-button v-if="order.status === 'assistant_confirm' && canAssistantConfirm(currentUserRole)" type="primary" size="small" @click.stop="assistantConfirmMobile(order)">确认</el-button>
             </div>
           </div>
         </div>
@@ -643,13 +612,16 @@
         <el-button type="primary" @click="submitManualInput" size="large">确认</el-button>
       </template>
     </el-dialog>
+
+    <!-- 通知面板 -->
+    <NotificationPanel v-model:visible="showNotifications" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   UserFilled,
   Camera,
@@ -672,7 +644,9 @@ import {
   Plus,
   Close
 } from '@element-plus/icons-vue'
-import { getTechLeadPendingWorkorders, getTechLeadPendingPool, state as workorderFlowState, acceptWorkorder as storeAcceptWorkorder, submitForSign, rejectWorkorder, techLeadConfirm, assistantConfirm, getVisibleWorkorders, getDirectorPendingPool, isTimeoutUnassigned, engineerList, assignWorkorder } from '../stores/workorderFlowStore.js'
+import { getTechLeadPendingWorkorders, getTechLeadPendingPool, state as workorderFlowState, acceptWorkorder as storeAcceptWorkorder, submitForSign, rejectWorkorder, techLeadConfirm, assistantConfirm, getVisibleWorkorders, getDirectorPendingPool, isTimeoutUnassigned, engineerList, assignWorkorder, canAcceptWorkorder, canRejectWorkorder, canSubmitForSign, canSignWorkorder, canTechLeadConfirm, canAssistantConfirm, canAssignWorkorder } from '../stores/workorderFlowStore.js'
+import { notifications, getUnreadCountByRole } from '../stores/notificationStore'
+import NotificationPanel from '../components/NotificationPanel.vue'
 
 const router = useRouter()
 
@@ -683,6 +657,10 @@ const staffInfo = reactive({
   roleDisplay: '',
   department: '技术服务部'
 })
+
+// 通知
+const showNotifications = ref(false)
+const notificationUnreadCount = computed(() => getUnreadCountByRole(staffInfo.role))
 
 // 从 localStorage 加载用户信息
 const loadUserInfo = () => {
@@ -744,6 +722,7 @@ const isAssistant = computed(() => {
 // 当前用户英文角色（从staffAuth获取）
 const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
 const currentUserRole = auth.role || ''
+const currentUserId = auth.id || auth.userId || ''
 
 // 部长超时待分配工单数
 const directorPendingCount = computed(() => {
@@ -759,6 +738,19 @@ const isManager = computed(() => {
 // 是否有团队管理权限（课长、部长不包含团队管理功能）
 const hasTeamAccess = computed(() => {
   return ['经理'].includes(staffInfo.role) || (isManager.value && staffInfo.role !== '课长' && staffInfo.role !== 'techLead' && staffInfo.role !== '部长' && staffInfo.role !== 'director')
+})
+
+// 移动端编辑权限（待分配 + 创建人）
+const canEditForMobile = (order) => {
+  const role = currentUserRole
+  if (role === 'admin') return true
+  if (order.createdBy && order.createdBy.role === role) return true
+  return false
+}
+
+// 是否课长或部长
+const isTechLeadOrDirector = computed(() => {
+  return ['techLead', 'director'].includes(staffInfo.role)
 })
 
 // 团队成员列表
@@ -825,35 +817,16 @@ const stats = computed(() => {
 
   return {
     today: todayWorkorders.length,
-    pending: recentWorkorders.value.filter(w => w.status === 'pending_accept').length,
+    pendingAssign: isTechLeadOrDirector.value
+      ? (staffInfo.role === 'director'
+          ? getDirectorPendingPool().length
+          : getTechLeadPendingPool(staffInfo.department).length)
+      : 0,
+    pendingAccept: recentWorkorders.value.filter(w => w.status === 'pending_accept').length,
     processing: recentWorkorders.value.filter(w => w.status === 'processing').length,
     fieldService: todayCheckins.length,
     pendingSign: recentWorkorders.value.filter(w => w.status === 'pending_sign').length
   }
-})
-
-// 今日待办 - 根据工单状态动态计算，只显示未完成的工单
-const todayTodos = computed(() => {
-  // 未完成的工单状态：待接单(assigned)、进行中(processing)、待签字(pending_sign)、待报价(quotation_pending)
-  const unfinishedStatuses = ['pending_accept', 'processing', 'pending_sign']
-
-  // 从最近工单中筛选出今日未完成工单
-  return recentWorkorders.value
-    .filter(w => {
-      // 检查是否为今日工单（创建时间是今天或状态为未完成）
-      const isToday = new Date(w.createTime).toDateString() === new Date().toDateString()
-      const isUnfinished = unfinishedStatuses.includes(w.status)
-      return isUnfinished
-    })
-    .map(w => ({
-      id: w.id,
-      type: w.type,
-      time: new Date(w.createTime).getHours().toString().padStart(2, '0') + ':00',
-      title: `${w.deviceModel || w.description || '服务'} - ${w.customerName}`,
-      address: w.address,
-      workorderId: w.workorderId,
-      status: w.status
-    }))
 })
 
 // 最近工单
@@ -947,6 +920,11 @@ const filteredWorkorders = computed(() => {
     default:
       return sortByTime(baseList)
   }
+})
+
+// 首页只显示最新10条
+const displayedWorkorders = computed(() => {
+  return filteredWorkorders.value.slice(0, 10)
 })
 
 // 待分配工单列表（按角色过滤）
@@ -1098,14 +1076,6 @@ const goToFieldCheckinList = () => {
   router.push('/staff-field-checkin-list')
 }
 
-const goToWorkorderManage = () => {
-  router.push('/workorder')
-}
-
-const goToMyWorkorders = () => {
-  router.push('/staff-workorder-list?filter=all')
-}
-
 const goToCreateWorkorder = () => {
   router.push('/staff-workorder-create')
 }
@@ -1182,6 +1152,44 @@ const goToCheckInFromWorkorder = (order) => {
 const rejectWorkorderMobile = (order) => {
   rejectWorkorder(order.id, '工程师弃单')
   ElMessage.success(`已弃单: ${order.workorderId}`)
+}
+
+// 与列表页统一的弃单（带确认）
+const rejectOrder = (order) => {
+  ElMessageBox.prompt('请输入弃单原因', '弃单', { type: 'warning' }).then(({ value: reason }) => {
+    rejectWorkorder(order.id || order.rawId, reason)
+    loadWorkorders()
+    ElMessage.success('已弃单，工单返回待分配')
+  }).catch(() => {})
+}
+
+const goToProcess = (order) => {
+  sessionStorage.setItem('workspace_activeTab', activeTab.value)
+  router.push(`/staff-workorder-detail?id=${order.id}&action=process`)
+}
+
+const goToSign = (order) => {
+  sessionStorage.setItem('workspace_activeTab', activeTab.value)
+  router.push(`/staff-workorder-detail?id=${order.id}&action=sign`)
+}
+
+const handleEditWorkorder = (order) => {
+  router.push(`/staff-workorder-create?id=${order.id}`)
+}
+
+const handleDeleteWorkorder = (order) => {
+  ElMessageBox.confirm(
+    `确定删除工单 ${order.workorderId} 吗？删除后不可恢复。`,
+    '删除确认',
+    { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+  ).then(() => {
+    const index = workorderFlowState.workorders.findIndex(w => w.id === order.id || w.workorderId === order.workorderId)
+    if (index !== -1) {
+      workorderFlowState.workorders.splice(index, 1)
+      loadWorkorders()
+      ElMessage.success('工单已删除')
+    }
+  }).catch(() => {})
 }
 
 // 分配工程师对话框
@@ -1276,33 +1284,6 @@ const assistantConfirmMobile = (order) => {
   ElMessage.success(`业务已确认: ${order.workorderId}`)
 }
 
-const handleTodoClick = (todo) => {
-  // 根据待办类型跳转到对应页面
-  switch (todo.type) {
-    case 'workorder':
-    case 'install':
-      // 跳转到工单详情，标记来源为工作台
-      router.push(`/staff-workorder-detail?id=${todo.workorderId}&from=workspace`)
-      break
-    case 'checkin':
-      // 跳转到打卡页面
-      router.push('/staff-checkin')
-      break
-    case 'approval':
-      // 跳转到审批页面
-      router.push('/staff-field-checkin-list?filter=pending_approval')
-      break
-    default:
-      // 默认跳转到工单详情，标记来源为工作台
-      router.push(`/staff-workorder-detail?id=${todo.workorderId}&from=workspace`)
-  }
-}
-
-// 课长专属方法
-const goToTeamManagement = () => {
-  router.push('/team-management')
-}
-
 const goToTeamWorkorders = () => {
   router.push('/staff-workorder-list?filter=all&scope=team')
 }
@@ -1317,10 +1298,6 @@ const goToTeamCheckins = () => {
 
 const goToTeamStatistics = () => {
   router.push('/team-statistics')
-}
-
-const goToTechLeadWorkorders = () => {
-  router.push('/techlead-workorder-manage')
 }
 
 // 待处理卡片点击跳转
@@ -1344,10 +1321,6 @@ const handlePendingAction = (item) => {
     default:
       router.push('/staff-workorder-list')
   }
-}
-
-const viewMemberDetail = (member) => {
-  router.push(`/member-detail?id=${member.id}`)
 }
 
 const openScan = () => {
@@ -1500,24 +1473,6 @@ const getStatusText = (status) => {
   return texts[status] || status
 }
 
-const getTodoType = (type) => {
-  const types = {
-    service: 'warning',
-    install: 'success',
-    repair: 'danger'
-  }
-  return types[type] || 'info'
-}
-
-const getTodoLabel = (type) => {
-  const labels = {
-    service: '维修',
-    install: '安装',
-    repair: '抢修'
-  }
-  return labels[type] || type
-}
-
 const formatDate = (date) => {
   if (!date) return ''
   const d = new Date(date)
@@ -1649,9 +1604,24 @@ const handleWindowFocus = () => {
   opacity: 0.9;
 }
 
-.header-actions .el-button {
+.header-actions {
+  display: flex; align-items: center; gap: 8px;
+}
+
+.bell-btn { color: white !important; }
+
+.device-switch-btn-raw {
+  background: rgba(255,255,255,0.2);
+  border: 1px solid rgba(255,255,255,0.3);
   color: white;
-  border-color: rgba(255,255,255,0.3);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.device-switch-btn-raw:active {
+  background: rgba(255,255,255,0.35);
 }
 
 /* 课长：团队概览区域 */
@@ -1722,94 +1692,6 @@ const handleWindowFocus = () => {
 }
 
 /* 课长：团队成员区域 */
-.team-section {
-  margin: 0 15px 15px;
-  background: white;
-  border-radius: 12px;
-  padding: 15px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-
-.team-section .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.team-section .section-header h4 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-  color: #262626;
-}
-
-.team-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.team-member {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.team-member:active {
-  background: #e8e8e8;
-}
-
-.member-avatar {
-  position: relative;
-}
-
-.member-status {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid white;
-}
-
-.member-status.online {
-  background: #52c41a;
-}
-
-.member-status.offline {
-  background: #bfbfbf;
-}
-
-.member-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.member-name {
-  font-size: 15px;
-  font-weight: 500;
-  color: #262626;
-}
-
-.member-stats {
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-.member-arrow {
-  color: #bfbfbf;
-  font-size: 16px;
-}
-
 /* 快捷功能入口 */
 .quick-actions {
   padding: 0 15px 15px;
@@ -2027,15 +1909,6 @@ const handleWindowFocus = () => {
   font-size: 16px;
 }
 
-/* 今日待办 */
-.todo-section {
-  margin: 0 15px 15px;
-  background: white;
-  border-radius: 12px;
-  padding: 15px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -2047,69 +1920,6 @@ const handleWindowFocus = () => {
   margin: 0;
   font-size: 16px;
   color: #262626;
-}
-
-.todo-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.todo-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 15px;
-  background: #f5f7fa;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.todo-item:active {
-  background: #e8e8e8;
-}
-
-.todo-time {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  min-width: 60px;
-}
-
-.todo-time .time {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1890ff;
-}
-
-.todo-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.todo-title {
-  font-size: 15px;
-  color: #262626;
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.todo-address {
-  font-size: 13px;
-  color: #8c8c8c;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* 工单区域 */
@@ -2128,9 +1938,10 @@ const handleWindowFocus = () => {
 }
 
 .workorder-card {
+  background: white;
+  border-radius: 12px;
   padding: 15px;
-  background: #f5f7fa;
-  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   cursor: pointer;
   transition: all 0.3s;
 }
@@ -2147,29 +1958,50 @@ const handleWindowFocus = () => {
 }
 
 .order-no {
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   color: #1890ff;
 }
 
 .card-body {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
-.device-info,
-.customer-info {
+.info-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-bottom: 8px;
   font-size: 14px;
   color: #595959;
-  margin-bottom: 6px;
+}
+
+.info-row .el-icon {
+  color: #8c8c8c;
+  font-size: 16px;
+}
+
+.device-model {
+  font-weight: 500;
+  color: #262626;
+}
+
+.customer-name {
+  color: #595959;
+}
+
+.address {
+  color: #8c8c8c;
+  font-size: 13px;
 }
 
 .order-desc {
   font-size: 14px;
   color: #262626;
-  margin: 8px 0;
+  margin: 10px 0 0;
+  padding: 10px;
+  background: #f5f7fa;
+  border-radius: 8px;
   line-height: 1.5;
 }
 
@@ -2177,11 +2009,18 @@ const handleWindowFocus = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
 }
 
 .order-time {
   font-size: 13px;
   color: #8c8c8c;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
 }
 
 /* 空状态 */
@@ -2551,12 +2390,9 @@ const handleWindowFocus = () => {
   padding: 8px 16px;
   background: #f5f5f5;
   border-radius: 20px;
-  font-size: 14px;
-  color: #595959;
   cursor: pointer;
   transition: all 0.3s;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .tab-item.active {
@@ -2564,15 +2400,31 @@ const handleWindowFocus = () => {
   color: white;
 }
 
-.tab-badge {
-  margin-left: 2px;
+.tab-name {
+  font-size: 14px;
 }
 
-.tab-badge :deep(.el-badge__content) {
-  font-size: 11px;
-  height: 18px;
-  line-height: 18px;
-  padding: 0 6px;
+.tab-count {
+  font-size: 12px;
+  background: #1890ff;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-item.active .tab-count {
+  background: white;
+  color: #1890ff;
+}
+
+.list-summary {
+  padding: 8px 0 0;
+  font-size: 13px;
+  color: #8c8c8c;
 }
 
 /* 分配工程师对话框 */

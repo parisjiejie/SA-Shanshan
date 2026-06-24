@@ -128,7 +128,7 @@ const routes = [
   {
     path: '/customer-workorder-detail',
     name: 'CustomerWorkorderDetail',
-    component: () => import('../views/CustomerWorkorderDetail.vue'),
+    component: () => import('../views/StaffWorkorderDetail.vue'),
     meta: { public: true }
   },
   {

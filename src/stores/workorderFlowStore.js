@@ -75,7 +75,7 @@ export const WorkorderFlowSteps = [
 // ==================== 状态管理 ====================
 const state = reactive({ workorders: [], notifications: [] })
 
-const MOCK_DATA_VERSION = 4 // 修改 mock 数据后递增此版本号
+const MOCK_DATA_VERSION = 7 // 修改 mock 数据后递增此版本号
 
 const loadFromStorage = () => {
   try {
@@ -381,10 +381,10 @@ const initiateQuotation = (workorderId) => {
   console.log('发起报价(模拟):', w.workorderId); return w
 }
 
-/** 保存签字PDF */
-const saveReportPdf = (workorderId, pdfBase64) => {
+/** 保存签字PDF及预览图片 */
+const saveReportPdf = (workorderId, pdfBase64, previewImages = []) => {
   const w = state.workorders.find(w => w.id === workorderId); if (!w) return null
-  w.reportPdf = pdfBase64; saveToStorage(); return w
+  w.reportPdf = pdfBase64; w.reportPreviewImages = previewImages; saveToStorage(); return w
 }
 
 // ==================== 通知 ====================
@@ -530,17 +530,49 @@ const initMockData = (force = false) => {
         if (w.customerSign) pdf.text('客户已签字确认', 14, 155)
         pdf.text(`工程师: ${w.engineerName || ''}`, 14, 165)
         pdf.text(`生成时间: ${new Date().toLocaleString('zh-CN')}`, 14, 175)
-        return pdf.output('datauristring')
+
+        // 生成预览图片（Canvas 2D 绘制，兼容所有浏览器含微信）
+        const canvas = document.createElement('canvas')
+        canvas.width = 800; canvas.height = 1132
+        const ctx = canvas.getContext('2d')
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 800, 1132)
+        ctx.fillStyle = '#333'; ctx.textAlign = 'center'
+        ctx.font = 'bold 28px sans-serif'; ctx.fillText('服务报告书', 400, 50)
+        ctx.textAlign = 'left'; ctx.font = '16px sans-serif'
+        let y = 90
+        const lines = [
+          `报告书 No.: ${w.workorderId || ''}`,
+          `客户名称: ${w.customerName || ''}`,
+          `设备型号: ${w.deviceModel || ''}`,
+          `序列号: ${w.serialNumber || ''}`,
+          `故障描述: ${w.faultDescription || ''}`,
+        ]
+        if (w.serviceReport) {
+          lines.push(`作业内容: ${w.serviceReport.workContent || ''}`)
+          lines.push(`处理过程: ${w.serviceReport.repairProcess || ''}`)
+          lines.push(`更换配件: ${(w.serviceReport.replacedParts || []).join('、') || '无'}`)
+          lines.push(`处理结果: ${w.serviceReport.testResult || ''}`)
+        }
+        lines.push('签字确认:')
+        if (w.customerSign) lines.push('客户已签字确认')
+        lines.push(`工程师: ${w.engineerName || ''}`)
+        lines.push(`生成时间: ${new Date().toLocaleString('zh-CN')}`)
+        lines.forEach(line => { ctx.fillText(line, 40, y); y += 28 })
+        const previewImage = canvas.toDataURL('image/jpeg', 0.9)
+
+        return { pdfDataUri: pdf.output('datauristring'), previewImages: [previewImage] }
       } catch (e) {
-        return 'data:application/pdf;base64,'
+        return { pdfDataUri: 'data:application/pdf;base64,', previewImages: [] }
       }
     }
 
     const pushMock = (id, wid, cat, sub, status, cTime, uTime, createdBy, custName, custPhone, model, serial, fault, urgency, warranty, wEnd, addr, records, engId, engName, engPhone, aTime, acTime, coTime, siTime, tlTime, asTime, sr, cs, es, pdf, qid) => {
       const wo = { id, workorderId: wid, category: cat, subType: sub, status, createTime: cTime, updateTime: uTime, createdBy, customerId: 'C001', customerName: custName, customerPhone: custPhone, customerContact: '', customerFax: '', deviceModel: model, serialNumber: serial, faultDescription: fault, urgency, attachments: [], warrantyStatus: warranty, warrantyEndDate: wEnd, installDate: '', address: addr, techLeadRole: 'techLead', techLeadName: sub ? SUBTYPE_TECHLEAD_MAP[sub].name : '', processRecords: records, engineerId: engId, engineerName: engName, engineerPhone: engPhone, assignTime: aTime, acceptTime: acTime, completeTime: coTime, signTime: siTime, techLeadConfirmTime: tlTime, assistantConfirmTime: asTime, serviceReport: sr, customerSign: cs, engineerSign: es, reportPdf: pdf, quotationId: qid, partsList: [], totalCostAmount: 0, totalSaleAmount: 0, totalProfitMargin: 0 }
-      // 演示环境：有签字或服务报告但无PDF的已签字状态工单，自动生成演示PDF
-      if (!wo.reportPdf && (cs || sr) && [WorkorderStatus.PENDING_SIGN, WorkorderStatus.TECHLEAD_CONFIRM, WorkorderStatus.ASSISTANT_CONFIRM, WorkorderStatus.COMPLETED].includes(status)) {
-        wo.reportPdf = generateDemoPdf(wo)
+      // 演示环境：已签字状态的工单自动生成演示PDF（待签字时还未签字，不应有PDF）
+      if (!wo.reportPdf && (cs || sr) && [WorkorderStatus.TECHLEAD_CONFIRM, WorkorderStatus.ASSISTANT_CONFIRM, WorkorderStatus.COMPLETED].includes(status)) {
+        const result = generateDemoPdf(wo)
+        wo.reportPdf = result.pdfDataUri
+        wo.reportPreviewImages = result.previewImages
       }
       state.workorders.push(wo)
     }
@@ -619,7 +651,28 @@ const initMockData = (force = false) => {
         {time:h(12),title:'业务确认',content:'工单完成',operator:'业务助理',operatorType:'assistant'}],
       'eng_006','吴工程师','13900639000',h(144),h(120),h(96),h(72),h(48),h(12),
       {workContent:'优化切削参数，更换刀具',repairProcess:'调整进给速度与主轴转速，更换精车刀片',replacedParts:['精车刀片'],testResult:'粗糙度达标'},
-      'sig_base64_3',null,'pdf_sample_base64',null)
+      'sig_base64_3',null,null,null)
+
+    // 补充已分配工单的附加字段（分配时填写的：协同人员、工作内容、时间、用车）
+    const byId = (id) => state.workorders.find(w => w.id === id)
+    // wo_002: 待接单（已分配）
+    const w2 = byId('wo_002')
+    if (w2) { w2.workContent = '试加工件精度检测与参数调整'; w2.workStartTime = h(10); w2.workEndTime = h(-2); w2.vehicle = 'company' }
+    // wo_003: 进行中（已接单）
+    const w3 = byId('wo_003')
+    if (w3) { w3.workContent = '模具复位机构改造'; w3.workStartTime = h(4); w3.workEndTime = h(-10); w3.vehicle = 'self'; w3.assignedEngineers = [{ id: 'eng_002', name: '王工程师' }, { id: 'eng_007', name: '陈工程师' }] }
+    // wo_004: 待签字（已提交服务报告）
+    const w4 = byId('wo_004')
+    if (w4) { w4.workContent = '更换激光器模块，校准光路'; w4.workStartTime = h(20); w4.workEndTime = h(-4); w4.vehicle = 'company' }
+    // wo_005: 课长确认（已签字）
+    const w5 = byId('wo_005')
+    if (w5) { w5.workContent = '安装调试激光切割机'; w5.workStartTime = h(44); w5.workEndTime = h(18); w5.vehicle = 'company' }
+    // wo_006: 业务确认（课长已确认）
+    const w6 = byId('wo_006')
+    if (w6) { w6.workContent = '更换主轴轴承'; w6.workStartTime = h(68); w6.workEndTime = h(44); w6.vehicle = 'self'; w6.assignedEngineers = [{ id: 'eng_005', name: '周工程师' }, { id: 'eng_008', name: '郑工程师' }] }
+    // wo_007: 已完成
+    const w7 = byId('wo_007')
+    if (w7) { w7.workContent = '优化切削参数，更换刀具'; w7.workStartTime = h(116); w7.workEndTime = h(92); w7.vehicle = 'public' }
 
     saveToStorage()
   }
@@ -743,8 +796,8 @@ export const getTechLeadPendingPool = (subDepartment) => {
     if (w.category === 'installation') return true
     // 服务工单按子类型匹配课室
     if (subTypes.length > 0 && subTypes.includes(w.subType)) return true
-    // 没有课室信息的课长看全部（兼容）
-    if (!subDepartment) return true
+    // 没有课室信息或课室不匹配时看全部待分配（兼容）
+    if (!subDepartment || subTypes.length === 0) return true
     return false
   }).sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 }

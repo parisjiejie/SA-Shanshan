@@ -105,7 +105,7 @@ export function buildReportHtml(workorder, signImage, signRole) {
  * @param {Object} workorder - 工单数据
  * @param {string} signImage - 签字图片 base64
  * @param {string} signRole - 'customer' 或 'engineer'
- * @returns {Promise<string>} PDF base64 data URL
+ * @returns {Promise<{pdfDataUri: string, previewImages: string[]}>} PDF data URL + 预览图片数组
  */
 export async function generateReportPdf(workorder, signImage, signRole) {
   // 先尝试 html2canvas 方案（带签名的精美PDF）
@@ -123,6 +123,23 @@ export async function generateReportPdf(workorder, signImage, signRole) {
     })
     document.body.removeChild(container)
 
+    // 保存预览图片（按A4页面切割）
+    const previewImages = []
+    const pagePixelHeight = Math.round(canvas.width * 297 / 210)
+    let pageY = 0
+    while (pageY < canvas.height) {
+      const pageCanvas = document.createElement('canvas')
+      pageCanvas.width = canvas.width
+      pageCanvas.height = Math.min(pagePixelHeight, canvas.height - pageY)
+      const pageCtx = pageCanvas.getContext('2d')
+      pageCtx.fillStyle = '#fff'
+      pageCtx.fillRect(0, 0, pageCanvas.width, pageCanvas.height)
+      pageCtx.drawImage(canvas, 0, pageY, canvas.width, pageCanvas.height, 0, 0, canvas.width, pageCanvas.height)
+      previewImages.push(pageCanvas.toDataURL('image/jpeg', 0.9))
+      pageY += pagePixelHeight
+    }
+
+    // 生成PDF
     const imgWidth = 210
     const imgHeight = (canvas.height * imgWidth) / canvas.width
     const pdf = new jsPDF('p', 'mm', 'a4')
@@ -141,7 +158,7 @@ export async function generateReportPdf(workorder, signImage, signRole) {
       pageNum++
     }
 
-    return pdf.output('datauristring')
+    return { pdfDataUri: pdf.output('datauristring'), previewImages }
   } catch (e) {
     if (container.parentNode) document.body.removeChild(container)
     console.warn('html2canvas PDF生成失败，使用jsPDF备用方案:', e.message)
@@ -171,9 +188,9 @@ function generateFallbackPdf(wo) {
     pdf.text('客户已签字确认', 14, y); y += 8
     if (wo.engineerName) { pdf.text(`工程师: ${wo.engineerName}`, 14, y); y += 8 }
     pdf.text(`生成时间: ${new Date().toLocaleString('zh-CN')}`, 14, y)
-    return pdf.output('datauristring')
+    return { pdfDataUri: pdf.output('datauristring'), previewImages: [] }
   } catch (e) {
     console.error('备用PDF生成也失败:', e)
-    return null
+    return { pdfDataUri: null, previewImages: [] }
   }
 }

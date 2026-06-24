@@ -130,7 +130,7 @@
 
     <!-- Bottom action bar -->
     <div class="bottom-bar" v-if="product">
-      <a href="tel:4008220907" class="bottom-btn contact-btn">
+      <a href="tel:10086" class="bottom-btn contact-btn">
         <el-icon><Phone /></el-icon>
         <span>联系咨询</span>
       </a>

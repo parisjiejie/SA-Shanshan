@@ -39,7 +39,7 @@
         @click="activeTab = tab.key"
       >
         <span class="tab-name">{{ tab.name }}</span>
-        <span class="tab-count" v-if="tab.count > 0">{{ tab.count }}</span>
+        <span class="tab-count" v-if="tab.count > 0 && tab.key !== 'all' && tab.key !== 'completed'">{{ tab.count }}</span>
       </div>
     </div>
 
@@ -57,10 +57,16 @@
       <el-button link size="small" @click="clearAllFilters">清除全部</el-button>
     </div>
 
+    <!-- 列表顶部数量提示 -->
+    <div class="list-summary" v-if="activeTab === 'all' || activeTab === 'completed'">
+      <span v-if="activeTab === 'all'">共 {{ filteredWorkorders.length }} 条工单</span>
+      <span v-else>已完成 {{ filteredWorkorders.length }} 条</span>
+    </div>
+
     <!-- 工单列表 -->
     <div class="workorder-list">
       <div
-        v-for="order in filteredWorkorders"
+        v-for="order in displayedWorkorders"
         :key="order.id"
         class="workorder-card"
         @click="viewWorkorderDetail(order)"
@@ -118,6 +124,12 @@
         <el-icon><Document /></el-icon>
         <p>暂无{{ statusTabs.find(t => t.key === activeTab)?.name || '相关' }}工单</p>
         <p v-if="searchKeyword || hasActiveFilters" class="empty-tip">请尝试调整搜索条件</p>
+      </div>
+
+      <!-- 底部加载状态 -->
+      <div class="load-more" v-if="filteredWorkorders.length > 0">
+        <span v-if="hasMore" class="load-more-text" @click="loadMore">上拉加载更多</span>
+        <span v-else class="no-more-text">没有更多了</span>
       </div>
     </div>
 
@@ -282,7 +294,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, reactive, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { state as workorderFlowState, WorkorderStatusText, WorkorderStatusType, acceptWorkorder as storeAccept, rejectWorkorder as storeReject, techLeadConfirm as storeTechLeadConfirm, assistantConfirm as storeAssistantConfirm, getVisibleWorkorders, canAcceptWorkorder, canRejectWorkorder, canSubmitForSign, canSignWorkorder, canTechLeadConfirm, canAssistantConfirm, canAssignWorkorder, engineerList, assignWorkorder } from '../stores/workorderFlowStore.js'
@@ -399,85 +411,21 @@ const activeFilters = computed(() => {
 
 const workorders = ref([])
 
-onMounted(() => {
-  // 加载工单数据
-  loadWorkorders()
-
-  // 恢复上次离开时的Tab状态（优先于query.filter）
-  const savedTab = sessionStorage.getItem('workorderList_activeTab')
-  const filter = route.query.filter
-  if (savedTab) {
-    activeTab.value = savedTab
-  } else if (filter && ['all', 'pending_assign', 'pending_accept', 'processing', 'pending_sign', 'techlead_confirm', 'assistant_confirm', 'completed'].includes(filter)) {
-    activeTab.value = filter
-  }
-
-  // 监听工单更新事件
-  window.addEventListener('workorder-updated', loadWorkorders)
-})
-
 // 工单列表（从store获取，按当前用户角色过滤）
 const loadWorkorders = () => {
   workorders.value = [...workorderFlowState.workorders].sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 }
 
-// 状态标签（根据角色动态生成，工程师不展示"待分配"）
-const showPendingAssignTab = computed(() => {
-  return ['admin', 'assistant', 'techLead', 'director'].includes(currentUserRole.value)
-})
-
-const statusTabs = computed(() => {
-  const tabs = [
-    { key: 'all', name: '全部', count: workorders.value.length },
-  ]
-  if (showPendingAssignTab.value) {
-    tabs.push({ key: 'pending_assign', name: '待分配', count: workorders.value.filter(w => w.status === 'pending_assign').length })
-  }
-  tabs.push(
-    { key: 'pending_accept', name: '待接单', count: workorders.value.filter(w => w.status === 'pending_accept').length },
-    { key: 'processing', name: '进行中', count: workorders.value.filter(w => w.status === 'processing').length },
-    { key: 'pending_sign', name: '待签字', count: workorders.value.filter(w => w.status === 'pending_sign').length },
-    { key: 'techlead_confirm', name: '课长确认', count: workorders.value.filter(w => w.status === 'techlead_confirm').length },
-    { key: 'assistant_confirm', name: '业务确认', count: workorders.value.filter(w => w.status === 'assistant_confirm').length },
-    { key: 'completed', name: '已完成', count: workorders.value.filter(w => w.status === 'completed').length }
-  )
-  return tabs
-})
-
-// 筛选后的工单
-const filteredWorkorders = computed(() => {
+// 基础筛选（搜索+筛选条件，不含状态tab筛选）
+const baseFilteredWorkorders = computed(() => {
   let result = workorders.value
 
-  // 0. 工程师在"全部"视图中不展示待分配工单
+  // 工程师不展示待分配工单
   if (currentUserRole.value === 'engineer') {
     result = result.filter(order => order.status !== 'pending_assign')
   }
 
-  // 1. 按状态标签筛选
-  if (activeTab.value !== 'all') {
-    result = result.filter(order => {
-      switch (activeTab.value) {
-        case 'pending_assign':
-          return order.status === 'pending_assign'
-        case 'pending_accept':
-          return order.status === 'pending_accept'
-        case 'processing':
-          return order.status === 'processing'
-        case 'pending_sign':
-          return order.status === 'pending_sign'
-        case 'techlead_confirm':
-          return order.status === 'techlead_confirm'
-        case 'assistant_confirm':
-          return order.status === 'assistant_confirm'
-        case 'completed':
-          return order.status === 'completed'
-        default:
-          return true
-      }
-    })
-  }
-
-  // 2. 按搜索关键词筛选
+  // 按搜索关键词筛选
   if (searchKeyword.value.trim()) {
     const keyword = searchKeyword.value.toLowerCase().trim()
     result = result.filter(order => {
@@ -492,7 +440,6 @@ const filteredWorkorders = computed(() => {
     })
   }
 
-  // 3. 按筛选条件筛选
   // 按类型筛选
   if (appliedFilters.value.type) {
     const fv = appliedFilters.value.type
@@ -537,6 +484,97 @@ const filteredWorkorders = computed(() => {
 
   return result.sort((a, b) => new Date(b.createTime) - new Date(a.createTime))
 })
+
+// 状态标签（根据角色动态生成，数字从筛选后数据计算）
+const showPendingAssignTab = computed(() => {
+  return ['admin', 'assistant', 'techLead', 'director'].includes(currentUserRole.value)
+})
+
+const statusTabs = computed(() => {
+  const base = baseFilteredWorkorders.value
+  const tabs = [
+    { key: 'all', name: '全部', count: base.length },
+  ]
+  if (showPendingAssignTab.value) {
+    tabs.push({ key: 'pending_assign', name: '待分配', count: base.filter(w => w.status === 'pending_assign').length })
+  }
+  tabs.push(
+    { key: 'pending_accept', name: '待接单', count: base.filter(w => w.status === 'pending_accept').length },
+    { key: 'processing', name: '进行中', count: base.filter(w => w.status === 'processing').length },
+    { key: 'pending_sign', name: '待签字', count: base.filter(w => w.status === 'pending_sign').length },
+    { key: 'techlead_confirm', name: '课长确认', count: base.filter(w => w.status === 'techlead_confirm').length },
+    { key: 'assistant_confirm', name: '业务确认', count: base.filter(w => w.status === 'assistant_confirm').length },
+    { key: 'completed', name: '已完成', count: base.filter(w => w.status === 'completed').length }
+  )
+  return tabs
+})
+
+// 筛选后的工单（基础筛选 + 状态tab筛选）
+const filteredWorkorders = computed(() => {
+  if (activeTab.value === 'all') {
+    return baseFilteredWorkorders.value
+  }
+  return baseFilteredWorkorders.value.filter(order => order.status === activeTab.value)
+})
+
+// 分页加载
+const pageSize = 10
+const displayCount = ref(pageSize)
+
+const displayedWorkorders = computed(() => {
+  return filteredWorkorders.value.slice(0, displayCount.value)
+})
+
+const hasMore = computed(() => displayCount.value < filteredWorkorders.value.length)
+
+const loadMore = () => {
+  if (hasMore.value) {
+    displayCount.value += pageSize
+  }
+}
+
+// 滚动加载（监听window滚动）
+const onWindowScroll = () => {
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+  const windowHeight = window.innerHeight
+  const docHeight = document.documentElement.scrollHeight
+  const threshold = 200
+  if (docHeight - scrollTop - windowHeight < threshold && hasMore.value) {
+    loadMore()
+  }
+}
+
+onMounted(() => {
+  // 加载工单数据
+  loadWorkorders()
+
+  // URL filter参数优先，否则恢复上次Tab状态
+  const filter = route.query.filter
+  const validFilters = ['all', 'pending_assign', 'pending_accept', 'processing', 'pending_sign', 'techlead_confirm', 'assistant_confirm', 'completed']
+  if (filter && validFilters.includes(filter)) {
+    activeTab.value = filter
+  } else {
+    const savedTab = sessionStorage.getItem('workorderList_activeTab')
+    if (savedTab) {
+      activeTab.value = savedTab
+    }
+  }
+
+  // 监听工单更新事件
+  window.addEventListener('workorder-updated', loadWorkorders)
+  // 监听滚动加载
+  window.addEventListener('scroll', onWindowScroll)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('workorder-updated', loadWorkorders)
+  window.removeEventListener('scroll', onWindowScroll)
+})
+
+// 切换tab或筛选时重置分页
+watch([activeTab, searchKeyword, appliedFilters], () => {
+  displayCount.value = pageSize
+}, { deep: true })
 
 // 方法
 const goBack = () => {
@@ -908,15 +946,26 @@ const clearAllFilters = () => {
 
 .tab-count {
   font-size: 12px;
-  background: #ff4d4f;
+  background: #1890ff;
   color: white;
   padding: 2px 6px;
   border-radius: 10px;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab-item.active .tab-count {
   background: white;
   color: #1890ff;
+}
+
+/* 列表顶部数量提示 */
+.list-summary {
+  padding: 8px 15px;
+  font-size: 13px;
+  color: #8c8c8c;
 }
 
 /* 工单列表 */
@@ -1034,6 +1083,23 @@ const clearAllFilters = () => {
   font-size: 12px;
   color: #8c8c8c;
   margin-top: 8px;
+}
+
+/* 底部加载状态 */
+.load-more {
+  text-align: center;
+  padding: 16px 0 24px;
+}
+
+.load-more-text {
+  font-size: 13px;
+  color: #1890ff;
+  cursor: pointer;
+}
+
+.no-more-text {
+  font-size: 13px;
+  color: #bfbfbf;
 }
 
 /* 筛选对话框 */

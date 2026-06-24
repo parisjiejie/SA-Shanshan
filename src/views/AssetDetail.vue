@@ -233,46 +233,7 @@
 
         <!-- 故障附件 -->
         <el-form-item label="故障附件">
-          <div class="attachment-section">
-            <div class="attachment-types">
-              <el-button type="primary" plain size="small" @click="triggerFileInput('image')">
-                <el-icon><Picture /></el-icon>
-                拍照/照片
-              </el-button>
-              <el-button type="success" plain size="small" @click="triggerFileInput('video')">
-                <el-icon><VideoCamera /></el-icon>
-                视频
-              </el-button>
-            </div>
-            <input
-              ref="fileInput"
-              type="file"
-              style="display: none"
-              :accept="fileAccept"
-              :capture="fileCapture"
-              @change="handleFileChange"
-            />
-            <div v-if="repairForm.attachments.length > 0" class="attachment-list">
-              <div
-                v-for="(file, index) in repairForm.attachments"
-                :key="index"
-                class="attachment-item"
-              >
-                <div class="attachment-info">
-                  <el-icon class="attachment-icon">
-                    <Picture v-if="file.type === 'image'" />
-                    <VideoCamera v-else />
-                  </el-icon>
-                  <span class="attachment-name">{{ file.name }}</span>
-                  <span class="attachment-size">({{ formatFileSize(file.size) }})</span>
-                </div>
-                <el-button type="danger" link size="small" @click="removeAttachment(index)">
-                  <el-icon><Delete /></el-icon>
-                </el-button>
-              </div>
-            </div>
-            <p class="attachment-tip">支持上传故障照片和视频，帮助工程师更快定位问题</p>
-          </div>
+          <RepairAttachments v-model="repairForm.attachments" />
         </el-form-item>
 
         <el-form-item label="紧急程度">
@@ -329,7 +290,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -351,6 +312,8 @@ import {
   Delete
 } from '@element-plus/icons-vue'
 import { createWorkorder, getCustomerWorkorders, state as workorderFlowState } from '../stores/workorderFlowStore.js'
+import { saveAttachments } from '../stores/attachmentStore.js'
+import RepairAttachments from '../components/RepairAttachments.vue'
 import { getAssetBySerialNumber } from '../stores/assetStore.js'
 
 const route = useRoute()
@@ -403,11 +366,6 @@ const commonFaultTags = [
   { label: '精度异常', description: '设备加工精度超出允许偏差范围' },
   { label: '过热报警', description: '设备运行中触发过热报警保护' }
 ]
-
-// 附件上传相关
-const fileInput = ref(null)
-const fileAccept = ref('image/*')
-const fileCapture = ref('environment')
 
 // 工单标签
 const workorderTabs = [
@@ -596,67 +554,7 @@ const goToDocuments = () => {
   router.push(`/asset-documents?serial=${deviceInfo.value?.serialNumber}&model=${encodeURIComponent(deviceInfo.value?.model)}`)
 }
 
-// 触发文件选择
-const triggerFileInput = (type) => {
-  if (type === 'image') {
-    fileAccept.value = 'image/*'
-    fileCapture.value = 'environment'
-  } else if (type === 'video') {
-    fileAccept.value = 'video/*'
-    fileCapture.value = 'environment'
-  }
-  nextTick(() => {
-    fileInput.value?.click()
-  })
-}
-
-// 处理文件选择
-const handleFileChange = (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-
-  // 检查文件大小（限制50MB）
-  const maxSize = 50 * 1024 * 1024
-  if (file.size > maxSize) {
-    ElMessage.warning('文件大小不能超过50MB')
-    return
-  }
-
-  // 读取文件为base64
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const attachment = {
-      name: file.name,
-      type: file.type.startsWith('image/') ? 'image' : 'video',
-      size: file.size,
-      data: e.target.result,
-      uploadTime: new Date().toISOString()
-    }
-    repairForm.value.attachments.push(attachment)
-    ElMessage.success('附件添加成功')
-  }
-  reader.readAsDataURL(file)
-
-  // 清空input，允许重复选择同一文件
-  event.target.value = ''
-}
-
-// 格式化文件大小
-const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
-
-// 删除附件
-const removeAttachment = (index) => {
-  repairForm.value.attachments.splice(index, 1)
-  ElMessage.success('附件已删除')
-}
-
-const submitRepair = () => {
+const submitRepair = async () => {
   if (!repairForm.value.description) {
     ElMessage.warning('请填写故障描述')
     return
@@ -666,10 +564,13 @@ const submitRepair = () => {
     return
   }
 
-  // 获取当前客户信息
-  let customerInfo = {}
+  // 获取当前客户信息（统一从 staffAuth 读取，与首页报修一致）
+  let customerId = ''
+  let customerName = ''
   try {
-    customerInfo = JSON.parse(localStorage.getItem('customerInfo') || '{}')
+    const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
+    customerId = auth.companyId || auth.id || ''
+    customerName = auth.companyName || ''
   } catch (e) {
     console.error('读取客户信息失败:', e)
   }
@@ -681,12 +582,12 @@ const submitRepair = () => {
     warrantyStatus = warrantyEnd > new Date() ? 'in_warranty' : 'out_of_warranty'
   }
 
-  const customerId = customerInfo.id || deviceInfo.value?.serialNumber || `guest_${Date.now()}`
-  const customerName = repairForm.value.customerName || deviceInfo.value?.customerName || '匿名客户'
+  // 将附件存入 IndexedDB，工单只存引用（避免 localStorage 5MB 限制）
+  const attachmentRefs = await saveAttachments(repairForm.value.attachments)
 
   const workorder = createWorkorder({
-    customerId: customerId,
-    customerName: customerName,
+    customerId: customerId || deviceInfo.value?.serialNumber || `guest_${Date.now()}`,
+    customerName: customerName || repairForm.value.customerName || deviceInfo.value?.customerName || '匿名客户',
     customerContact: repairForm.value.contactPerson,
     customerPhone: repairForm.value.contactPhone,
     deviceModel: deviceInfo.value?.model || repairForm.value.model,
@@ -694,7 +595,7 @@ const submitRepair = () => {
     faultDescription: repairForm.value.description,
     urgency: repairForm.value.urgency,
     subType: repairForm.value.subType || 'repair',
-    attachments: repairForm.value.attachments,
+    attachments: attachmentRefs,
     warrantyStatus: warrantyStatus,
     warrantyEndDate: deviceInfo.value?.warrantyEndDate,
     address: repairForm.value.address || deviceInfo.value?.installAddress || ''
@@ -1055,115 +956,6 @@ onMounted(() => {
 /* 报修对话框附件样式 */
 :deep(.repair-dialog .el-dialog__body) {
   max-height: 75vh;
-}
-
-.attachment-section {
-  border: 1px dashed #d9d9d9;
-  border-radius: 8px;
-  padding: 15px;
-  background: #fafafa;
-}
-
-.attachment-types {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.attachment-types .el-button {
-  flex: 1;
-  min-width: 80px;
-}
-
-.recording-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px;
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  border-radius: 6px;
-  margin-bottom: 12px;
-}
-
-.recording-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #f5222d;
-  font-size: 14px;
-}
-
-.recording-dot {
-  width: 10px;
-  height: 10px;
-  background: #f5222d;
-  border-radius: 50%;
-  animation: pulse 1s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(1.1);
-  }
-}
-
-.attachment-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.attachment-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: white;
-  border: 1px solid #e8e8e8;
-  border-radius: 6px;
-}
-
-.attachment-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.attachment-icon {
-  font-size: 18px;
-  color: #1890ff;
-}
-
-.attachment-name {
-  font-size: 14px;
-  color: #262626;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-
-.attachment-size {
-  font-size: 12px;
-  color: #8c8c8c;
-  white-space: nowrap;
-}
-
-.attachment-tip {
-  font-size: 12px;
-  color: #8c8c8c;
-  margin: 0;
-  text-align: center;
 }
 
 /* 操作手册内容 */

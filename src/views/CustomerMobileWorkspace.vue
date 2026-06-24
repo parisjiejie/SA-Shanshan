@@ -44,20 +44,20 @@
           <span class="action-desc">提交维修申请</span>
         </div>
         
-        <div class="action-item parts" @click="createPartsOrder">
-          <div class="action-icon">
-            <el-icon><ShoppingCart /></el-icon>
-          </div>
-          <span class="action-label">配件购买</span>
-          <span class="action-desc">购买原厂配件</span>
-        </div>
-
         <div class="action-item product" @click="openProductLibrary">
           <div class="action-icon">
             <el-icon><Goods /></el-icon>
           </div>
           <span class="action-label">产品库</span>
           <span class="action-desc">山善全线产品</span>
+        </div>
+
+        <div class="action-item parts" @click="createPartsOrder">
+          <div class="action-icon">
+            <el-icon><ShoppingCart /></el-icon>
+          </div>
+          <span class="action-label">配件购买</span>
+          <span class="action-desc">购买原厂配件</span>
         </div>
       </div>
     </div>
@@ -102,16 +102,22 @@
           @click="activeTab = tab.key"
         >
           <span class="tab-name">{{ tab.name }}</span>
-          <span class="tab-count" v-if="tab.count > 0">{{ tab.count }}</span>
+          <span class="tab-count" v-if="tab.count > 0 && tab.key !== 'all' && tab.key !== 'completed'">{{ tab.count }}</span>
         </div>
       </div>
+
+      <div class="list-summary" v-if="activeTab === 'all' || activeTab === 'completed'">
+        <span v-if="activeTab === 'all'">共 {{ filteredWorkorders.length }} 条工单</span>
+        <span v-else>已完成 {{ filteredWorkorders.length }} 条</span>
+      </div>
+
       <div class="workorder-list">
         <div v-if="filteredWorkorders.length === 0" class="empty-state">
           <el-icon><Document /></el-icon>
           <p>暂无{{ getTabName(activeTab) }}工单</p>
         </div>
         <div 
-          v-for="order in filteredWorkorders" 
+          v-for="order in displayedWorkorders" 
           :key="order.id" 
           class="workorder-card"
           @click="viewWorkorderDetail(order)"
@@ -123,10 +129,10 @@
             </el-tag>
           </div>
           <div class="card-body">
-            <p class="device-info">
+            <div class="info-row">
               <el-icon><Monitor /></el-icon>
-              {{ order.deviceModel || '设备型号未指定' }}
-            </p>
+              <span class="device-model">{{ order.deviceModel || '设备型号未指定' }}</span>
+            </div>
             <p class="order-desc">{{ order.faultDescription || order.description }}</p>
           </div>
           <div class="card-footer">
@@ -482,34 +488,7 @@
             </div>
           </el-form>
           <!-- 故障附件：照片/视频 -->
-          <div class="fault-attachments">
-            <div class="attachment-actions">
-              <el-button type="primary" plain size="small" @click="pickRepairPhoto">
-                <el-icon><Picture /></el-icon> 拍照/照片
-              </el-button>
-              <el-button type="success" plain size="small" @click="pickRepairVideo">
-                <el-icon><VideoCamera /></el-icon> 视频
-              </el-button>
-            </div>
-            <div class="attachment-preview-list" v-if="repairDialog.attachments.length">
-              <div
-                v-for="(att, idx) in repairDialog.attachments"
-                :key="idx"
-                class="attachment-item"
-              >
-                <img v-if="att.type === 'image'" :src="att.url" class="att-thumb" @click="previewImage(att.url)" />
-                <div v-else-if="att.type === 'video'" class="att-video-thumb" @click="playRepairVideo(att.url)">
-                  <el-icon class="play-icon"><VideoCamera /></el-icon>
-                  <span>视频</span>
-                </div>
-                <el-icon class="att-remove" @click="removeRepairAttachment(idx)"><Close /></el-icon>
-              </div>
-            </div>
-            <p class="attachment-tip">支持上传故障照片和视频，帮助工程师更快定位问题</p>
-          </div>
-          <!-- 隐藏的文件输入 -->
-          <input ref="repairPhotoInput" type="file" accept="image/*" capture="environment" style="display:none" @change="onRepairPhotoSelected" />
-          <input ref="repairVideoInput" type="file" accept="video/*" style="display:none" @change="onRepairVideoSelected" />
+          <RepairAttachments v-model="repairDialog.attachments" />
         </div>
       </div>
       <template #footer>
@@ -613,19 +592,7 @@
       </div>
     </div>
 
-    <!-- PDF预览对话框 -->
-    <el-dialog
-      v-model="pdfDialog.visible"
-      title="服务报告书"
-      width="95%"
-      fullscreen
-      @close="onPdfDialogClose"
-    >
-      <iframe v-if="pdfDialog.url" :src="pdfDialog.url" style="width:100%;height:70vh;border:none;"></iframe>
-      <div style="text-align:center;margin-top:15px;">
-        <el-button type="primary" @click="downloadPdf">下载PDF</el-button>
-      </div>
-    </el-dialog>
+    <!-- PDF预览已改为新窗口打开，不再使用弹框 -->
 
     <!-- 消息通知对话框 -->
     <el-dialog
@@ -674,6 +641,22 @@
         <span>{{ nav.name }}</span>
       </div>
     </div>
+
+    <!-- PDF全屏预览覆盖层（图片展示兼容微信，iframe兜底） -->
+    <div v-if="pdfOverlay.visible" class="pdf-overlay">
+      <div class="pdf-overlay-header">
+        <el-button link @click="closePdfOverlay">
+          <el-icon><ArrowLeft /></el-icon>
+          <span>返回</span>
+        </el-button>
+        <span class="header-title">PDF预览</span>
+        <el-button link size="small" @click="downloadCurrentPdf">下载</el-button>
+      </div>
+      <div v-if="pdfOverlay.images.length > 0" class="pdf-preview-images">
+        <img v-for="(img, i) in pdfOverlay.images" :key="i" :src="img" class="preview-page" />
+      </div>
+      <iframe v-else :src="pdfOverlay.url" class="pdf-overlay-iframe" frameborder="0"></iframe>
+    </div>
   </div>
 </template>
 
@@ -682,6 +665,8 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { signWorkorder, getPendingSignWorkorders, getWorkorderById, saveReportPdf, createWorkorder } from '../stores/workorderFlowStore.js'
+import { saveAttachments } from '../stores/attachmentStore.js'
+import RepairAttachments from '../components/RepairAttachments.vue'
 import { generateReportPdf } from '../utils/reportPdf.js'
 import {
   UserFilled,
@@ -877,6 +862,7 @@ const loadWorkorders = () => {
     createTime: new Date(w.createTime),
     needsSign: w.status === 'pending_sign',
     reportPdf: w.reportPdf,
+    reportPreviewImages: w.reportPreviewImages || [],
     serviceReport: w.serviceReport,
     customerName: w.customerName,
     engineerName: w.engineerName,
@@ -907,6 +893,11 @@ const filteredWorkorders = computed(() => {
         return true
     }
   })
+})
+
+// 首页只显示最新10条
+const displayedWorkorders = computed(() => {
+  return filteredWorkorders.value.slice(0, 10)
 })
 
 // 扫码对话框
@@ -978,8 +969,6 @@ const repairDialog = reactive({
   },
   attachments: [] // { type: 'image'|'video', url: base64DataUrl, name: string }
 })
-const repairPhotoInput = ref(null)
-const repairVideoInput = ref(null)
 
 // 设备数据（从 assetStore 获取）
 const repairAssets = computed(() => {
@@ -1094,11 +1083,75 @@ const signCanvas = ref(null)
 let isDrawing = false
 let ctx = null
 
-// PDF预览对话框
-const pdfDialog = reactive({
+// PDF全屏覆盖预览（图片展示兼容微信，iframe兜底）
+const pdfOverlay = reactive({
   visible: false,
-  url: ''
+  url: '',
+  images: [],
+  _blobUrl: null,
+  _dataUri: null
 })
+
+const dataUriToBlobUrl = (dataUri) => {
+  let base64 = dataUri
+  const match = dataUri.match(/;base64,([\s\S]*)$/i)
+  if (match) base64 = match[1]
+  base64 = base64.replace(/[\s\n\r]/g, '')
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i) & 0xff
+  }
+  const blob = new Blob([bytes], { type: 'application/pdf' })
+  return URL.createObjectURL(blob)
+}
+
+const openPdfInNewTab = (dataUri, previewImages) => {
+  try {
+    if (pdfOverlay._blobUrl) {
+      URL.revokeObjectURL(pdfOverlay._blobUrl)
+    }
+    // 优先使用预览图片（兼容微信等不支持PDF的浏览器）
+    if (previewImages && previewImages.length > 0) {
+      pdfOverlay.images = previewImages
+      pdfOverlay.url = ''
+      pdfOverlay._blobUrl = null
+    } else {
+      pdfOverlay.images = []
+      const url = dataUriToBlobUrl(dataUri)
+      pdfOverlay.url = url
+      pdfOverlay._blobUrl = url
+    }
+    pdfOverlay._dataUri = dataUri
+    pdfOverlay.visible = true
+  } catch (e) {
+    console.error('PDF预览失败:', e)
+    ElMessage.warning('PDF预览失败，请尝试下载')
+  }
+}
+
+const closePdfOverlay = () => {
+  pdfOverlay.visible = false
+  if (pdfOverlay._blobUrl) {
+    URL.revokeObjectURL(pdfOverlay._blobUrl)
+    pdfOverlay._blobUrl = null
+  }
+  pdfOverlay.url = ''
+  pdfOverlay._dataUri = null
+}
+
+const downloadCurrentPdf = () => {
+  if (pdfOverlay._dataUri) {
+    const a = document.createElement('a')
+    a.href = pdfOverlay._dataUri
+    a.download = '服务报告书.pdf'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  } else {
+    ElMessage.warning('PDF数据不可用')
+  }
+}
 
 // 方法
 const openScan = () => {
@@ -1436,11 +1489,14 @@ const createRepairOrder = () => {
   repairDialog.visible = true
 }
 
-const submitRepairOrder = () => {
+const submitRepairOrder = async () => {
   if (!repairDialog.form.faultDescription) {
     ElMessage.warning('请填写故障描述')
     return
   }
+
+  // 将附件存入 IndexedDB，工单只存引用（避免 localStorage 5MB 限制）
+  const attachmentRefs = await saveAttachments(repairDialog.attachments)
 
   const auth = JSON.parse(localStorage.getItem('staffAuth') || '{}')
   const wo = createWorkorder({
@@ -1456,83 +1512,12 @@ const submitRepairOrder = () => {
     subType: repairDialog.form.subType,
     urgency: repairDialog.form.urgency,
     warrantyStatus: repairDialog.form.warrantyStatus || 'unknown',
-    attachments: repairDialog.attachments.map(a => ({ type: a.type, url: a.url, name: a.name }))
+    attachments: attachmentRefs
   }, 'customer', repairDialog.form.customerContact || auth.name)
 
   ElMessage.success(`报修申请已提交，工单号 ${wo.workorderId}`)
   repairDialog.visible = false
   loadWorkorders()
-}
-
-// 报修附件：选择照片
-const pickRepairPhoto = () => {
-  if (repairPhotoInput.value) repairPhotoInput.value.click()
-}
-
-// 报修附件：选择视频
-const pickRepairVideo = () => {
-  if (repairVideoInput.value) repairVideoInput.value.click()
-}
-
-// 报修附件：照片选中
-const onRepairPhotoSelected = (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-  // 限制大小 10MB
-  if (file.size > 10 * 1024 * 1024) {
-    ElMessage.warning('照片大小不能超过10MB')
-    event.target.value = ''
-    return
-  }
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    repairDialog.attachments.push({ type: 'image', url: e.target.result, name: file.name })
-  }
-  reader.readAsDataURL(file)
-  event.target.value = ''
-}
-
-// 报修附件：视频选中
-const onRepairVideoSelected = (event) => {
-  const file = event.target.files[0]
-  if (!file) return
-  // 限制大小 50MB
-  if (file.size > 50 * 1024 * 1024) {
-    ElMessage.warning('视频大小不能超过50MB')
-    event.target.value = ''
-    return
-  }
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    repairDialog.attachments.push({ type: 'video', url: e.target.result, name: file.name })
-  }
-  reader.readAsDataURL(file)
-  event.target.value = ''
-}
-
-// 报修附件：删除
-const removeRepairAttachment = (idx) => {
-  repairDialog.attachments.splice(idx, 1)
-}
-
-// 报修附件：播放视频
-const playRepairVideo = (url) => {
-  const preview = document.createElement('div')
-  preview.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:9999;'
-  const video = document.createElement('video')
-  video.src = url
-  video.controls = true
-  video.autoplay = true
-  video.style.cssText = 'max-width:90%;max-height:80%;'
-  const closeBtn = document.createElement('div')
-  closeBtn.innerHTML = '✕'
-  closeBtn.style.cssText = 'position:absolute;top:20px;right:20px;color:white;font-size:30px;cursor:pointer;padding:10px;'
-  preview.appendChild(video)
-  preview.appendChild(closeBtn)
-  document.body.appendChild(preview)
-  const close = () => { video.pause(); document.body.removeChild(preview) }
-  closeBtn.onclick = close
-  preview.onclick = (e) => { if (e.target === preview) close() }
 }
 
 const createPartsOrder = () => {
@@ -1695,9 +1680,9 @@ const confirmSignature = async () => {
     
     if (wo) {
       try {
-        const pdfBase64 = await generateReportPdf(wo, signatureData, 'customer')
-        if (pdfBase64) {
-          saveReportPdf(wo.id, pdfBase64)
+        const result = await generateReportPdf(wo, signatureData, 'customer')
+        if (result.pdfDataUri) {
+          saveReportPdf(wo.id, result.pdfDataUri, result.previewImages)
         }
       } catch (e) {
         console.error('PDF生成失败:', e)
@@ -1731,44 +1716,19 @@ const previewWorkorderPdf = (order) => {
     ElMessage.warning('PDF不存在')
     return
   }
-  // 将 data URI 转为 Blob URL（手机浏览器不支持 iframe 渲染 data: URI）
-  try {
-    const dataUri = order.reportPdf
-    const base64Match = dataUri.match(/^data:application\/pdf;base64,(.+)$/)
-    if (base64Match) {
-      const binaryStr = atob(base64Match[1])
-      const bytes = new Uint8Array(binaryStr.length)
-      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i)
-      const blob = new Blob([bytes], { type: 'application/pdf' })
-      const blobUrl = URL.createObjectURL(blob)
-      pdfDialog.url = blobUrl
-      pdfDialog._blobUrl = blobUrl // 记录以便关闭时释放
-    } else {
-      pdfDialog.url = dataUri
-    }
-  } catch (e) {
-    console.error('PDF转换失败:', e)
-    pdfDialog.url = order.reportPdf
-  }
-  pdfDialog.visible = true
-}
-
-const onPdfDialogClose = () => {
-  if (pdfDialog._blobUrl) {
-    URL.revokeObjectURL(pdfDialog._blobUrl)
-    pdfDialog._blobUrl = null
-  }
+  openPdfInNewTab(order.reportPdf, order.reportPreviewImages)
 }
 
 const downloadPdf = () => {
-  if (!pdfDialog.url) return
-  const a = document.createElement('a')
-  a.href = pdfDialog.url
-  a.download = '服务报告书.pdf'
-  a.target = '_blank'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+  if (pdfOverlay._dataUri) {
+    const a = document.createElement('a')
+    a.href = pdfOverlay._dataUri
+    a.download = '服务报告书.pdf'
+    a.target = '_blank'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
 }
 
 const switchNav = (key) => {
@@ -2146,16 +2106,26 @@ onUnmounted(() => {
 }
 
 .tab-count {
-  background: #ff4d4f;
+  background: #1890ff;
   color: white;
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 6px;
   border-radius: 10px;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab-item.active .tab-count {
   background: white;
   color: #1890ff;
+}
+
+.list-summary {
+  padding: 8px 0 0;
+  font-size: 13px;
+  color: #8c8c8c;
 }
 
 .workorder-list {
@@ -2176,15 +2146,16 @@ onUnmounted(() => {
 }
 
 .workorder-card {
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  padding: 12px;
+  background: white;
+  border-radius: 12px;
+  padding: 15px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .workorder-card:active {
-  background: #f5f5f5;
+  transform: scale(0.98);
 }
 
 .card-header {
@@ -2195,39 +2166,50 @@ onUnmounted(() => {
 }
 
 .order-no {
-  font-size: 14px;
-  color: #8c8c8c;
-  font-family: monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1890ff;
 }
 
 .card-body {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
-.device-info {
+.info-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  color: #262626;
-  margin: 0 0 8px;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #595959;
+}
+
+.info-row .el-icon {
+  color: #8c8c8c;
+  font-size: 16px;
+}
+
+.device-model {
   font-weight: 500;
+  color: #262626;
 }
 
 .order-desc {
   font-size: 14px;
-  color: #595959;
-  margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  color: #262626;
+  margin: 10px 0 0;
+  padding: 10px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  line-height: 1.5;
 }
 
 .card-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
 }
 
 .order-time {
@@ -3049,77 +3031,44 @@ onUnmounted(() => {
   flex: 1;
 }
 
-/* 故障附件 */
-.fault-attachments {
-  margin-top: 12px;
-}
-
-.attachment-actions {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.attachment-actions .el-button {
-  flex: 1;
-}
-
-.attachment-preview-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.attachment-item {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid #e8e8e8;
-}
-
-.att-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  cursor: pointer;
-}
-
-.att-video-thumb {
-  width: 100%;
-  height: 100%;
-  background: #f0f0f0;
+.pdf-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: #fff;
+  z-index: 10000;
   display: flex;
   flex-direction: column;
+}
+.pdf-overlay-header {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #8c8c8c;
-  font-size: 12px;
-  gap: 4px;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  flex-shrink: 0;
 }
-
-.att-video-thumb .play-icon {
-  font-size: 24px;
-  color: #1890ff;
+.pdf-overlay-header .header-title {
+  font-size: 16px;
+  font-weight: 500;
 }
-
-.att-remove {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  background: rgba(0,0,0,0.5);
-  color: white;
-  border-radius: 50%;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 2px;
+.pdf-overlay-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
 }
-
-.attachment-tip {
-  font-size: 12px;
-  color: #bfbfbf;
-  margin: 8px 0 0;
+.pdf-preview-images {
+  flex: 1;
+  overflow-y: auto;
+  background: #f5f5f5;
+  padding: 10px;
+}
+.preview-page {
+  display: block;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 4px;
 }
 </style>

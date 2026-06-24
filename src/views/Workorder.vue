@@ -300,8 +300,7 @@
         <div class="header-card">
           <div class="header-left">
             <div class="detail-title">
-              <el-icon><Tools /></el-icon>
-              <span>{{ selectedWorkorder.id }}</span>
+              <span>{{ selectedWorkorder.workorderId || selectedWorkorder.id }}</span>
               <el-tag :type="getCategoryTagType(selectedWorkorder.category)" size="small" effect="dark">
                 {{ getCategoryText(selectedWorkorder) }}
               </el-tag>
